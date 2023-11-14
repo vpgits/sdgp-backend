@@ -1,6 +1,8 @@
+
+
 # Test your FastAPI endpoints
 
-GET http://127.0.0.1:8000/
+GET http://127.0.0.1:8000
 Accept: application/json
 
 ###
@@ -9,3 +11,28 @@ GET http://127.0.0.1:8000/hello/User
 Accept: application/json
 
 ###
+# curl -X 'POST'
+#  'http://127.0.0.1:8000/parse'
+#  -H 'accept: application/json'
+#  -H 'Content-Type: multipart/form-data'
+#  -F 'file=@sample.pdf;type=application/pdf'
+POST http://127.0.0.1:8000/parse
+accept: application/json
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="./sample.pdf"
+
+< sample.pdf
+--WebAppBoundary--
+
+###
+
+
+
+
+
+
+
+
+
