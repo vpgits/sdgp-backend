@@ -1,9 +1,19 @@
+import asyncio
+import json
+import os
+import re
 from io import BytesIO
-
+import aiohttp
+import psycopg2
 from PyPDF2 import PdfReader
-from fastapi import FastAPI, File
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, HTTPException
+from openai import OpenAI
+# from app.database.document import upload_pdf
+# from pdf_processing.parse import pdf_to_pages
 
 app = FastAPI()
+load_dotenv()
 
 
 @app.get("/")
@@ -16,14 +26,174 @@ async def say_hello(name: str):
     return {"message": f"Hello {name}"}
 
 
-@app.post("/parse")
-#async function which will extract a pdf file from the post request
-async def parse_pdf(file: bytes = File(...)):
+# @app.post("/parse")
+# async def parse_pdf(file: bytes = File(...)):
+#     try:
+#         pages = await pdf_to_pages(file)
+#         return {"data": pages}
+#     except Exception as e:
+#         return {"error": str(e)}, 500
+
+
+# @app.post("/uploadfile/")
+# async def create_upload_file(file: bytes = File(...)):
+#     try:
+#         # Assuming upload_pdf is a predefined function that processes the file
+#         response = await upload_pdf(file)
+#         return {"response": response}
+#     except Exception as e:
+#         # Raise a HTTPException with status code 500
+#         raise HTTPException(status_code=500, detail=str(e))
+
+
+# write me a post function that returns a byte stream of a file
+
+@app.post("/parse_pdf_pages/")
+async def parse_pdf_pages():
+    # this function will parse an entire pdf into an array of pages
     try:
-        reader = PdfReader(BytesIO(file))
-        metadata = reader.metadata
-        return {"message": f"Hello {metadata}"}
+        with open('sample.pdf', 'rb') as f:
+            response = f.read()
+        reader = PdfReader(BytesIO(response))
+        pages = []
+        for page in reader.pages:
+            cleaned_page = re.sub(r"\s+", " ", page.extract_text())
+            pages.append(cleaned_page)
+        return {"pages": pages}
+    except FileNotFoundError:
+        # File not found error
+        raise HTTPException(status_code=404, detail="File not found")
     except Exception as e:
-        return {"message": f"Hello {e}"}
+        # Other exceptions
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/parse_pdf_sentences/")
+async def parse_pdf_sentences():
+    # this function will parse an entire pdf to sentences array
+    pages = await parse_pdf_pages()
+    try:
+        sentences = []
+        for page in pages.get("pages"):
+            sentences.append(re.split(r'(?<=[^A-Z].[.?]) +(?=[A-Z])', page))
+        return sentences
+    except Exception as e:
+        # Raise a HTTPException with status code 500
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate_embeddings/")
+async def generate_embeddings():
+    # this function will take a batch of sentences and pass it to the embedding endpoint
+    try:
+        sentences = await parse_pdf_pages()
+        await asyncio.gather(*(make_database_embedding(sentence) for sentence in sentences))
+    # write proper exceptions to handle errors here
+    except Exception as e:
+        # Raise a HTTPException with status code 500
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate_summary/")
+async def generate_summary():
+    # this function will take a batch of pages and create summaries
+    try:
+        key_points = []
+        sentences = await parse_pdf_sentences()
+        page_summaries = await asyncio.gather(*(create_summary_json(sentence) for sentence in sentences))
+        for page_summary in page_summaries:
+            key_points.extend(json.loads(page_summary).get("key_points"))
+        response = create_summary_json(key_points, "Order key points on importance. Most important on top")
+        return response
+    # write proper exceptions to handle errors here
+    except Exception as e:
+        # Raise a HTTPException with status code 500
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def make_database_embedding(sentence):
+    # this function is only used to insert embedding to the database
+    # remember to remove the bearer token in next deps
+    headers = {
+        'Authorization': f'Bearer {os.environ.get("SUPABASE_KEY")}',
+        'Content-Type': 'application/json'
+    }
+    url = 'https://mokzgwuuykjeipsyzuwe.supabase.co/functions/v1/embed'
+
+    data = {
+        'input': sentence,
+        'document_id': 1
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=data) as response:
+            return await response.json()
+
+
+async def create_summary_json(text, subtext=None):
+    # this openai function takes in a string and outputs a summary
+    client = OpenAI()
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo-1106",
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system",
+             "content": "You are to summarize a user given text into key points. Return only an JSON of key "
+                        f"points.Only field should be key_points of type array.{subtext}"},
+            {"role": "user", "content": f"{text}"}
+        ]
+    )
+    return response.choices[0].message.content
+
+
+async def generate_embedding_query(text):
+    # This function will return an embedding of 384 dimensions
+    headers = {
+        'Authorization': f'Bearer {os.getenv("SUPABASE_KEY")}',
+    }
+    url = "https://mokzgwuuykjeipsyzuwe.supabase.co/functions/v1/embed_query"
+    data = {'input': text}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=data) as response:
+            # Ensure response is successful
+            response.raise_for_status()
+            return await response.json()
+
+
+def create_mcq_json(key_point="what is encapsulation", context=None):
+    client = OpenAI()
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo-1106",  # gpt-4-1106-preview
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system",
+             "content": "You are to generate a multiple choice question. Generate question and answers based on the reference but do not depend on it. Its a guideline. Return only an JSON of fields question, correct_answer, incorrect_answers of type array.."},
+            {"role": "user", "content": f"question: {key_point}? context:{context}"}
+        ]
+    )
+    return response.choices[0].message.content
+
+
+def execute_query(query, params=None):
+    # this is a barebone prostgresql query function
+    DB_CONNECTION = os.getenv('DB_CONNECTION')
+    conn = psycopg2.connect(DB_CONNECTION)
+    with conn.cursor() as cur:
+        cur.execute(query, params)
+        if query.lower().strip().startswith("select"):
+            return cur.fetchall()
+        conn.commit()
+        return None
+
+
+async def cosine_similarity_query(query):
+    # this will return an array of similar text from the embedding table
+    embedding = await generate_embedding_query(query)
+    embedding = embedding.get("embedding")
+    query = """SELECT body FROM public.embeddings ORDER BY embedding <=> '{query_embedding}' LIMIT 5"""
+    return await execute_query(query)
+
+
+async def load_mcq(key_point, context, document_id=1):
+    question_json = create_mcq_json(key_point, context)
+    insert_query = f" INSERT INTO public.questions (data, document_id) VALUES (%s, 1)"
+    execute_query(insert_query, (json.dumps(question_json),))
