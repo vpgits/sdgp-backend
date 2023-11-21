@@ -7,8 +7,11 @@ import aiohttp
 import psycopg2
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException
-from openai import OpenAI
+from fastapi import FastAPI, HTTPException
+
+from create_mcq import create_mcq_json
+from create_summary import create_summary_json
+
 # from app.database.document import upload_pdf
 # from pdf_processing.parse import pdf_to_pages
 
@@ -86,7 +89,7 @@ async def parse_pdf_sentences():
 async def generate_embeddings():
     # this function will take a batch of sentences and pass it to the embedding endpoint
     try:
-        sentences = await parse_pdf_pages()
+        sentences = await parse_pdf_sentences()
         await asyncio.gather(*(make_database_embedding(sentence) for sentence in sentences))
     # write proper exceptions to handle errors here
     except Exception as e:
@@ -99,11 +102,13 @@ async def generate_summary():
     # this function will take a batch of pages and create summaries
     try:
         key_points = []
-        sentences = await parse_pdf_sentences()
-        page_summaries = await asyncio.gather(*(create_summary_json(sentence) for sentence in sentences))
+        pages_dict = await parse_pdf_pages()
+        pages = pages_dict.get("pages")
+        page_summaries = await asyncio.gather(*(create_summary_json(text=page) for page in pages))
+        print(page_summaries)
         for page_summary in page_summaries:
             key_points.extend(json.loads(page_summary).get("key_points"))
-        response = create_summary_json(key_points, "Order key points on importance. Most important on top")
+        response = await create_summary_json(key_points)
         return response
     # write proper exceptions to handle errors here
     except Exception as e:
@@ -129,22 +134,6 @@ async def make_database_embedding(sentence):
             return await response.json()
 
 
-async def create_summary_json(text, subtext=None):
-    # this openai function takes in a string and outputs a summary
-    client = OpenAI()
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo-1106",
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system",
-             "content": "You are to summarize a user given text into key points. Return only an JSON of key "
-                        f"points.Only field should be key_points of type array.{subtext}"},
-            {"role": "user", "content": f"{text}"}
-        ]
-    )
-    return response.choices[0].message.content
-
-
 async def generate_embedding_query(text):
     # This function will return an embedding of 384 dimensions
     headers = {
@@ -157,20 +146,6 @@ async def generate_embedding_query(text):
             # Ensure response is successful
             response.raise_for_status()
             return await response.json()
-
-
-def create_mcq_json(key_point="what is encapsulation", context=None):
-    client = OpenAI()
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo-1106",  # gpt-4-1106-preview
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system",
-             "content": "You are to generate a multiple choice question. Generate question and answers based on the reference but do not depend on it. Its a guideline. Return only an JSON of fields question, correct_answer, incorrect_answers of type array.."},
-            {"role": "user", "content": f"question: {key_point}? context:{context}"}
-        ]
-    )
-    return response.choices[0].message.content
 
 
 def execute_query(query, params=None):
