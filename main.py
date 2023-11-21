@@ -1,19 +1,15 @@
 import asyncio
 import json
-import os
 import re
 from io import BytesIO
-import aiohttp
-import psycopg2
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 
-from create_mcq import create_mcq_json
+from create_embeddings import make_database_embedding, generate_embedding_query
 from create_summary import create_summary_json
-
-# from app.database.document import upload_pdf
-# from pdf_processing.parse import pdf_to_pages
+from custom_classes import Document, Embeddings, Query
+from database import download_file
 
 app = FastAPI()
 load_dotenv()
@@ -29,33 +25,12 @@ async def say_hello(name: str):
     return {"message": f"Hello {name}"}
 
 
-# @app.post("/parse")
-# async def parse_pdf(file: bytes = File(...)):
-#     try:
-#         pages = await pdf_to_pages(file)
-#         return {"data": pages}
-#     except Exception as e:
-#         return {"error": str(e)}, 500
-
-
-# @app.post("/uploadfile/")
-# async def create_upload_file(file: bytes = File(...)):
-#     try:
-#         # Assuming upload_pdf is a predefined function that processes the file
-#         response = await upload_pdf(file)
-#         return {"response": response}
-#     except Exception as e:
-#         # Raise a HTTPException with status code 500
-#         raise HTTPException(status_code=500, detail=str(e))
-
-
-# write me a post function that returns a byte stream of a file
-
 @app.post("/parse_pdf_pages/")
-async def parse_pdf_pages():
+async def parse_pdf_pages(props: Document):
     # this function will parse an entire pdf into an array of pages
     try:
-        with open('sample.pdf', 'rb') as f:
+        download_file(props.path)
+        with open(f'./resources/{props.path}', 'rb') as f:
             response = f.read()
         reader = PdfReader(BytesIO(response))
         pages = []
@@ -72,13 +47,13 @@ async def parse_pdf_pages():
 
 
 @app.post("/parse_pdf_sentences/")
-async def parse_pdf_sentences():
+async def parse_pdf_sentences(pages: list):
     # this function will parse an entire pdf to sentences array
-    pages = await parse_pdf_pages()
+
     try:
         sentences = []
-        for page in pages.get("pages"):
-            sentences.append(re.split(r'(?<=[^A-Z].[.?]) +(?=[A-Z])', page))
+        for page in pages:
+            sentences.extend(re.split(r'(?<=[^A-Z].[.?]) +(?=[A-Z])', page))
         return sentences
     except Exception as e:
         # Raise a HTTPException with status code 500
@@ -86,15 +61,30 @@ async def parse_pdf_sentences():
 
 
 @app.post("/generate_embeddings/")
-async def generate_embeddings():
-    # this function will take a batch of sentences and pass it to the embedding endpoint
+async def generate_embeddings(props: Embeddings):
+    # this function will take a batch of sentences and create embeddings
+    responses = []
     try:
-        sentences = await parse_pdf_sentences()
-        await asyncio.gather(*(make_database_embedding(sentence) for sentence in sentences))
-    # write proper exceptions to handle errors here
+        sentences = await parse_pdf_sentences(props.pages)
+        responses = await asyncio.gather(
+            *(make_database_embedding(sentence, props.document_id) for sentence in sentences[:1]))
+        if all(response["message"] == "Embedding added successfully!" for response in responses):
+            return {"message": "Embeddings added successfully!"}
+        else:
+            return {"message": "Embeddings not added successfully!"}
+    except Exception as e:
+        # Raise a HTTPException with status code 500
+        raise HTTPException(status_code=500, detail=responses)
+
+
+@app.post("/generate_embedding/")
+async def generate_embedding(props: Query):
+    try:
+        response = await generate_embedding_query(props.query)
     except Exception as e:
         # Raise a HTTPException with status code 500
         raise HTTPException(status_code=500, detail=str(e))
+    return response
 
 
 @app.post("/generate_summary/")
@@ -114,61 +104,3 @@ async def generate_summary():
     except Exception as e:
         # Raise a HTTPException with status code 500
         raise HTTPException(status_code=500, detail=str(e))
-
-
-async def make_database_embedding(sentence):
-    # this function is only used to insert embedding to the database
-    # remember to remove the bearer token in next deps
-    headers = {
-        'Authorization': f'Bearer {os.environ.get("SUPABASE_KEY")}',
-        'Content-Type': 'application/json'
-    }
-    url = 'https://mokzgwuuykjeipsyzuwe.supabase.co/functions/v1/embed'
-
-    data = {
-        'input': sentence,
-        'document_id': 1
-    }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, json=data) as response:
-            return await response.json()
-
-
-async def generate_embedding_query(text):
-    # This function will return an embedding of 384 dimensions
-    headers = {
-        'Authorization': f'Bearer {os.getenv("SUPABASE_KEY")}',
-    }
-    url = "https://mokzgwuuykjeipsyzuwe.supabase.co/functions/v1/embed_query"
-    data = {'input': text}
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, json=data) as response:
-            # Ensure response is successful
-            response.raise_for_status()
-            return await response.json()
-
-
-def execute_query(query, params=None):
-    # this is a barebone prostgresql query function
-    DB_CONNECTION = os.getenv('DB_CONNECTION')
-    conn = psycopg2.connect(DB_CONNECTION)
-    with conn.cursor() as cur:
-        cur.execute(query, params)
-        if query.lower().strip().startswith("select"):
-            return cur.fetchall()
-        conn.commit()
-        return None
-
-
-async def cosine_similarity_query(query):
-    # this will return an array of similar text from the embedding table
-    embedding = await generate_embedding_query(query)
-    embedding = embedding.get("embedding")
-    query = """SELECT body FROM public.embeddings ORDER BY embedding <=> '{query_embedding}' LIMIT 5"""
-    return await execute_query(query)
-
-
-async def load_mcq(key_point, context, document_id=1):
-    question_json = create_mcq_json(key_point, context)
-    insert_query = f" INSERT INTO public.questions (data, document_id) VALUES (%s, 1)"
-    execute_query(insert_query, (json.dumps(question_json),))

@@ -8,8 +8,10 @@ def create_mcq_json(key_point="what is encapsulation", context=None):
         response_format={"type": "json_object"},
         messages=[
             {"role": "system",
-             "content": "You are to generate a multiple choice question. Generate question and answers based on the "
-                        "reference but do not depend on it. Its a guideline. Return only an JSON of fields question, "
+             "content": "You are to generate a multiple choice question. Generate question based on the question "
+                        "field and answers based on thecontext field. Make sure to create appropirate question and "
+                        "answers which are suitable for "
+                        "multiple choice questions. Its a guideline. Return only an JSON of fields question,"
                         "correct_answer, incorrect_answers of type array.."},
             {"role": "user", "content": f"question: {key_point}? context:{context}"}
         ]
