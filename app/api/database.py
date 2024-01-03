@@ -1,19 +1,19 @@
 import os
 from supabase import create_client, Client
-from create_embeddings import generate_embedding_query
+from app.api.create_embeddings import generate_embedding_query
 import json
 import psycopg2
 from fastapi import HTTPException
-from create_mcq import create_mcq_json
+from app.api.create_mcq import create_mcq_json
 from dotenv import load_dotenv
+
+from app.config.supabase_client import get_supabase
 
 load_dotenv()
 
 
 def download_file(path: str):
-    url: str = os.environ.get("SUPABASE_URL")
-    key: str = os.environ.get("SUPABASE_KEY")
-    supabase: Client = create_client(url, key)
+    supabase: Client = get_supabase()
     file_path = f"./resources/{path}"
     res = supabase.storage.from_('public/pdf').download(path)
     # Write the downloaded content to a file

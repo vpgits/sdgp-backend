@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.12 (sdgp-backend)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.11.6 WSL (Ubuntu-22.04): (/home/ubuntu/work/sdgp-backend/venv/bin/python3.11)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.11 (sdgp-backend)" project-jdk-type="Python SDK" />
 </project>

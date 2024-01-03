@@ -6,10 +6,10 @@ from PyPDF2 import PdfReader
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 
-from create_embeddings import make_database_embedding, generate_embedding_query
-from create_summary import create_summary_json
-from custom_classes import Document, Embeddings, Query
-from database import download_file
+from app.api.create_embeddings import make_database_embedding, generate_embedding_query
+from app.api.create_summary import create_summary_json
+from app.api.custom_classes import Document, Embeddings, Query
+from app.api.database import download_file
 
 app = FastAPI()
 load_dotenv()
