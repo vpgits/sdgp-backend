@@ -14,3 +14,8 @@ class Query(BaseModel):
 class Embeddings(BaseModel):
     document_id: int
     pages: list
+
+
+class Mcq(BaseModel):
+    document_id: int
+    key_point_id: int
