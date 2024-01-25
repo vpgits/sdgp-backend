@@ -1,14 +1,12 @@
-import asyncio
 import logging
 import os
-import aiohttp
 from dotenv import load_dotenv
 import torch.nn.functional as F
 from torch import Tensor
 from transformers import AutoTokenizer, AutoModel
-from supabase import Client
 from pinecone import Pinecone
 from pinecone.exceptions import NotFoundException
+from app.api.parse import sliding_window
 
 load_dotenv()
 
@@ -20,17 +18,19 @@ def generate_embedding_query(sentence: str):
     return generate_embeddings([sentence])[0]
 
 
-def create_vector_index(chunks: list[str], document_id: str):
+def create_vector_index(pages: list[str], document_id: str):
     if do_embeddings_exist(document_id):
         logger.info("Embeddings already exist!")
         return
     try:
+        chunks = sliding_window(pages)
+        logger.info("Generating embeddings")
         embeddings = generate_embeddings(chunks)
         logger.info("Adding embeddings to Pinecone")
         for index, embedding in enumerate(embeddings):
             add_embeddings_to_pinecone(embedding, f"{document_id}:{index}", document_id)
     except Exception as e:
-        logger.error(f"Anc exception has occurred: {str(e)}")
+        logger.error(f"Anc exception has occurred in create vector index: {str(e)}")
         raise e
 
 
@@ -42,23 +42,21 @@ def do_embeddings_exist(document_id: str):
     except NotFoundException:
         return False
     except Exception as e:
-        logger.error(f"An exception has occurred: {str(e)}")
+        logger.error(f"An exception has occurred in do embeddings exist: {str(e)}")
         raise e
 
 
-def generate_embeddings(input_texts: list[str]):
+def generate_embeddings(input_texts: list[str]) -> list[list[float]]:
     try:
-        logging.info("Generating embeddings")
         tokenizer = AutoTokenizer.from_pretrained("./app/api/gte-small/")
         model = AutoModel.from_pretrained("./app/api/gte-small/")
         batch_dict = tokenizer(input_texts, max_length=512, padding=True, truncation=True, return_tensors="pt")
         outputs = model(**batch_dict)
         embeddings = average_pool(outputs.last_hidden_state, batch_dict["attention_mask"])
         embeddings = F.normalize(embeddings, p=2, dim=1)
-        logging.info("Embeddings generated successfully!")
         return embeddings.tolist()
     except Exception as e:
-        logger.error(f"An exception has occurred: {str(e)}")
+        logger.error(f"An exception has occurred while generating embeddings: {str(e)}")
         raise e
 
 
@@ -74,5 +72,5 @@ def add_embeddings_to_pinecone(embedding, embedding_id: str, document_id: str):
         index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"))
         index.upsert(vectors=[{"id": embedding_id, "values": embedding}], namespace=document_id)
     except Exception as e:
-        logger.error(f"An exception has occurred: {str(e)}")
+        logger.error(f"An exception has occurred when adding embeddings to pinecone: {str(e)}")
         raise e

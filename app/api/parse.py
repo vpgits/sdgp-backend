@@ -32,8 +32,7 @@ def does_pages_exist(supabase: Client, document_id: str) -> bool:
         raise e
 
 
-def get_pages(supabase: Client, document_id: str) -> str:
-    logging.info(document_id)
+def get_pages(supabase: Client, document_id: str) -> list[str]:
     data = supabase.from_("documents").select("data").eq("id", document_id).execute()
     pages = data.data[0].get("data").get("data")[0]
     logging.info("Pages retrieved successfully!")
@@ -59,7 +58,6 @@ def read_pdf(path: str) -> list[str]:
 
 
 def add_pages_to_supabase(supabase_client: Client, pages: list[str], document_id: str) -> None:
-    pages = sliding_window(pages)
     supabase_client.table("documents").update({"data": {"data": pages}}).eq(
         "id", document_id
     ).execute()
