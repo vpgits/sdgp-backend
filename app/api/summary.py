@@ -16,7 +16,6 @@ def create_summary_json(
             .eq("id", document_id)
             .execute()
         )
-        logging.info(summary)
         if summary.data[0].get("summary") is not None:
             logging.info("Summary already exists!")
         else:

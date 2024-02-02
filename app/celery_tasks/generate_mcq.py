@@ -6,7 +6,7 @@ import logging
 
 @app.task(name="generate_mcq")
 def generate_mcq_worker(
-        key_point_id, access_token, refresh_token
+        question_id, key_point_id, access_token, refresh_token
 ):
     generate_mcq_worker_helper(key_point_id, access_token, refresh_token)
     return {"message": "success"}

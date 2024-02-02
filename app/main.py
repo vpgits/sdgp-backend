@@ -1,8 +1,12 @@
+from celery.result import AsyncResult
 from fastapi import FastAPI, HTTPException, Depends, Request
-from app.models.main import PreprocessBody, GenerateMCQBody
-from app.celery_tasks.generate_mcq import generate_mcq_worker
-from app.celery_tasks.preprocess import preprocess_worker
-from app.celery_tasks.tick_tock import tick_tock_worker
+from celery_worker.celery_app import app as celery_app
+from app.models.main import PreprocessBody, GenerateMCQBody, QuizBody
+
+# from app.celery_tasks.generate_mcq import generate_mcq_worker
+# from app.celery_tasks.preprocess import preprocess_worker
+# from app.celery_tasks.tick_tock import tick_tock_worker
+# from app.celery_tasks.quiz import quiz_worker
 
 
 app = FastAPI()
@@ -17,10 +21,14 @@ def extract_header_auth_tokens(request: Request) -> tuple[str, str]:
 
 
 @app.post("/preprocess/")
-async def preprocess(request: PreprocessBody, tokens: tuple[str, str] = Depends(extract_header_auth_tokens)):
-    task = preprocess_worker.delay(
-        request.path, request.document_id, *tokens
+async def preprocess(
+    request: PreprocessBody,
+    tokens: tuple[str, str] = Depends(extract_header_auth_tokens),
+):
+    task = celery_app.send_task(
+        "preprocess", args=[request.path, request.document_id, *tokens]
     )
+    # task = preprocess_worker.delay(request.path, request.document_id, *tokens)
     return {
         "task_id": task.id,
         "message": "Task has been sent to the background worker",
@@ -28,10 +36,14 @@ async def preprocess(request: PreprocessBody, tokens: tuple[str, str] = Depends(
 
 
 @app.post("/generate_mcq/")
-async def generate_mcq(request: GenerateMCQBody, tokens: tuple[str, str] = Depends(extract_header_auth_tokens)):
-    task = generate_mcq_worker.delay(
-        request.document_id, request.key_point_id, *tokens
+async def generate_mcq(
+    request: GenerateMCQBody,
+    tokens: tuple[str, str] = Depends(extract_header_auth_tokens),
+):
+    task = celery_app.send_task(
+        "generate_mcq", args=[request.question_id, request.key_point_id, *tokens]
     )
+    # task = generate_mcq_worker.delay(request.question_id, request.key_point_id, *tokens)
     return {
         "task_id": task.id,
         "message": "Task has been sent to the background worker",
@@ -40,7 +52,20 @@ async def generate_mcq(request: GenerateMCQBody, tokens: tuple[str, str] = Depen
 
 @app.get("/ticktock/")
 async def tick_tock():
-    task = tick_tock_worker.delay()
+    task = celery_app.send_task("ticktock")
+    # task = tick_tock_worker.delay()
+    return {
+        "task_id": task.id,
+        "message": "Task has been sent to the background worker",
+    }
+
+
+@app.post("/quiz/")
+async def quiz(
+    request: QuizBody, tokens: tuple[str, str] = Depends(extract_header_auth_tokens)
+):
+    task = celery_app.send_task("quiz", args=[request.quiz_id, *tokens])
+    # task = quiz_worker.delay(request.quiz_id, **tokens)
     return {
         "task_id": task.id,
         "message": "Task has been sent to the background worker",
@@ -49,13 +74,14 @@ async def tick_tock():
 
 @app.get("/{worker_name}/{task_id}")
 async def check_task_status(worker_name: str, task_id: str):
-    worker_function = {
-        'preprocess': preprocess_worker,
-        'generate_mcq': generate_mcq_worker,
-        'ticktock': tick_tock_worker
-    }.get(worker_name)
+    worker_functions = ["preprocess", "generate_mcq", "ticktock", "quiz"]
 
-    if not worker_function:
+    if worker_name not in worker_functions:
         raise HTTPException(status_code=404, detail="Worker not found")
-    task = worker_function.AsyncResult(task_id)
-    return {"task_id": task_id, "task_status": task.status, "task_result": task.result}
+
+    task = AsyncResult(task_id, app=celery_app)
+    return {
+        "task_id": task_id,
+        "task_status": task.status,
+        "task_result": task.result if task.ready() else None,
+    }
