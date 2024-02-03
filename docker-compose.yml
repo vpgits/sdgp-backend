@@ -2,9 +2,10 @@ version: "3.8"
 
 services:
   web:
+    image: "sdgp-backend-worker"
     build:
       context: .
-      dockerfile: ./docker/fastapi/Dockerfile
+      dockerfile: ./fastapi_app/Dockerfile
     ports:
       - "8000:8000"
     depends_on:
@@ -13,7 +14,7 @@ services:
   worker:
     build:
       context: .
-      dockerfile: ./docker/celery/Dockerfile
+      dockerfile: ./celery_workers/Dockerfile
     depends_on:
       - rabbitmq
 
@@ -26,7 +27,7 @@ services:
   flower:
     image: mher/flower
     environment:
-      - CELERY_BROKER_URL=pyamqp://guest@rabbitmq:5672/
+      - CELERY_BROKER_URL=pyamqp://sdgp_admin:59h@WeMyBtfV$YD@rabbitmq:5672/
     command: celery flower
     ports:
       - "5555:5555"

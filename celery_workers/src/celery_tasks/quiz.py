@@ -1,13 +1,11 @@
 import logging
 import os
-import string
 import requests
 import json
-from app.api.parse import get_pages
-from app.config.supabase_client import get_supabase_client
+from api.parse import get_pages
+from config.supabase_client import get_supabase_client
 from supabase import Client
-from celery_worker.celery_app import app
-from app.models.main import MCQ
+from celery_app.celery_app import app
 from dotenv import load_dotenv
 
 load_dotenv()

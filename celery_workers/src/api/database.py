@@ -1,12 +1,12 @@
 import logging
 import os
 from supabase import Client
-from app.api.embeddings import generate_embedding_query
+from api.embeddings import generate_embedding_query
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from pinecone.core.client.model.query_response import QueryResponse
-from app.config.supabase_client import get_supabase_client
-from app.api.parse import get_pages, sliding_window
+from config.supabase_client import get_supabase_client
+from api.parse import get_pages, sliding_window
 
 load_dotenv()
 

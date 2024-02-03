@@ -1,13 +1,13 @@
-from celery_worker.celery_app import app
-from app.api.database import extract_context
-from app.config.supabase_client import get_supabase_client, get_current_user
-from app.api.parse import parse_pdf_pages, does_pages_exist, get_pages
-from app.api.embeddings import create_vector_index
-from app.api.summary import create_summary_json
+from celery_app.celery_app import app
+from api.database import extract_context
+from config.supabase_client import get_supabase_client, get_current_user
+from api.parse import parse_pdf_pages, does_pages_exist, get_pages
+from api.embeddings import create_vector_index
+from api.summary import create_summary_json
 from supabase import Client
 import logging
 import os
-from celery_worker.celery_app import app
+from celery_app.celery_app import app
 
 logger = logging.getLogger(__name__)
 

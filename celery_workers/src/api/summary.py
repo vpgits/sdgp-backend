@@ -2,7 +2,7 @@ import json
 import logging
 from openai import OpenAI
 from supabase import Client
-from app.config.supabase_client import get_supabase_client
+from config.supabase_client import get_supabase_client
 
 
 def create_summary_json(

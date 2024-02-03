@@ -1,4 +1,4 @@
-from celery_worker.celery_app import app
+from celery_app.celery_app import app
 import time
 
 

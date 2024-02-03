@@ -14,13 +14,3 @@ class GenerateMCQBody(BaseModel):
 
 class QuizBody(BaseModel):
     quiz_id: str
-
-
-class OutputModel(BaseModel):
-    question: str
-    correct_answer: str
-    incorrect_answers: List[str]
-
-
-class MCQ(BaseModel):
-    Output: OutputModel

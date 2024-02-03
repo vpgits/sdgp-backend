@@ -1,12 +1,12 @@
 import logging
 import os
 from dotenv import load_dotenv
+
 import torch.nn.functional as F
 from torch import Tensor
 from transformers import AutoTokenizer, AutoModel
 from pinecone import Pinecone
-from pinecone.exceptions import NotFoundException
-from app.api.parse import sliding_window
+from api.parse import sliding_window
 
 load_dotenv()
 
@@ -19,49 +19,54 @@ def generate_embedding_query(sentence: str):
 
 
 def create_vector_index(pages: list[str], document_id: str):
-    if do_embeddings_exist(document_id):
-        logger.info("Embeddings already exist!")
-        delete_embeddings_index(document_id)
+    # if do_embeddings_exist(document_id):
+    #     logger.info("Embeddings already exist!")
+    #     delete_embeddings_index(document_id)
     try:
         chunks = sliding_window(pages)
         logger.info("Generating embeddings")
         embeddings = generate_embeddings(chunks)
         logger.info(f"{len(chunks)} Embeddings generated")
         logger.info("Adding embeddings to Pinecone")
-        embeddings_list = [{f"{document_id}:{id}", embedding} for id, embedding in enumerate(embeddings)]
-        add_embeddings_to_pinecone(embeddings_list, document_id)
-        for index, embedding in enumerate(embeddings):
-            add_embeddings_to_pinecone(embedding, f"{document_id}:{index}", document_id)
+        vectors = list(
+            (f"{document_id}:{index}", embedding)
+            for index, embedding in enumerate(embeddings)
+        )
+
+        add_embeddings_to_pinecone(vectors, document_id)
+
+        # for index, embedding in enumerate(embeddings):
+        #     add_embeddings_to_pinecone(embedding, f"{document_id}:{index}", document_id)
     except Exception as e:
         logger.error(f"Anc exception has occurred in create vector index: {str(e)}")
         raise e
 
 
-def do_embeddings_exist(document_id: str):
-    try:
-        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"))
-        return document_id in index.describe_index_stats()["namespaces"]
-    except Exception as e:
-        logger.error(f"An exception has occurred in do embeddings exist: {str(e)}")
-        raise e
+# def do_embeddings_exist(document_id: str):
+#     try:
+#         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+#         index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"))
+#         return document_id in index.describe_index_stats()["namespaces"]
+#     except Exception as e:
+#         logger.error(f"An exception has occurred in do embeddings exist: {str(e)}")
+#         raise e
 
 
-def delete_embeddings_index(document_id: str):
-    try:
-        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"))
-        index.delete(delete_all=True, namespace=document_id)
-    except Exception as e:
-        logger.error(f"An exception has occurred in delete embeddings index: {str(e)}")
-        raise e
+# def delete_embeddings_index(document_id: str):
+#     try:
+#         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+#         index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"))
+#         index.delete(delete_all=True, namespace=document_id)
+#     except Exception as e:
+#         logger.error(f"An exception has occurred in delete embeddings index: {str(e)}")
+#         raise e
 
 
 def generate_embeddings(input_texts: list[str]) -> [list[float]]:
     try:
         logging.info("Generating embeddings on geneerate_embeddings")
-        tokenizer = AutoTokenizer.from_pretrained("./app/api/gte-small/")
-        model = AutoModel.from_pretrained("./app/api/gte-small/")
+        tokenizer = AutoTokenizer.from_pretrained("./api/gte-small/")
+        model = AutoModel.from_pretrained("./api/gte-small/")
         batch_dict = tokenizer(
             input_texts,
             max_length=512,
@@ -88,10 +93,9 @@ def average_pool(last_hidden_states: Tensor, attention_mask: Tensor) -> Tensor:
 def add_embeddings_to_pinecone(embeddings: list[dict], document_id: str):
     try:
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"))
-        index.upsert(
-            vectors=embeddings, namespace=document_id
-        )
+        index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"), pool_threads=30)
+        async_results = [index.upsert(vectors=embeddings,namespace=document_id, async_req=True)]
+        [async_result.get() for async_result in async_results]
     except Exception as e:
         logger.error(
             f"An exception has occurred when adding embeddings to pinecone: {str(e)}"
