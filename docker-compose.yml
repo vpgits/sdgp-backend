@@ -2,7 +2,6 @@ version: "3.8"
 
 services:
   web:
-    image: "sdgp-backend-worker"
     build:
       context: .
       dockerfile: ./fastapi_app/Dockerfile
@@ -19,7 +18,12 @@ services:
       - rabbitmq
 
   rabbitmq:
-    image: "rabbitmq:3-management"
+    image: "rabbitmq:3.12-management"
+    volumes:
+      - ./rabbitmq_definitions.json:/etc/rabbitmq/definitions.json
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    environment:
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_management.load_definitions "/etc/rabbitmq/definitions.json"
     ports:
       - "15672:15672"
       - "5672:5672"
@@ -27,7 +31,8 @@ services:
   flower:
     image: mher/flower
     environment:
-      - CELERY_BROKER_URL=pyamqp://sdgp_admin:59h@WeMyBtfV$YD@rabbitmq:5672/
+      - CELERY_BROKER_URL=pyamqp://sdgp_admin:<password>@rabbitmq:15672/
+
     command: celery flower
     ports:
       - "5555:5555"
