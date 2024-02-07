@@ -1,0 +1,66 @@
+{
+  "family": "sdgp-backend",
+  "networkMode": "awsvpc",
+  "containerDefinitions": [
+    {
+      "name": "sdgp-backend-web",
+      "image": "702913649645.dkr.ecr.us-east-2.amazonaws.com/sdgp-backend-web",
+      "cpu": 256,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "command": ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
+      "dependsOn": [
+        {
+          "containerName": "sdgp-backend-rabbitmq"
+        }
+      ]
+    },
+    {
+      "name": "sdgp-backend-rabbitmq",
+      "image": "702913649645.dkr.ecr.us-east-2.amazonaws.com/sdgp-backend-rabbitmq",
+      "cpu": 256,
+      "memory": 512,
+      "portMappings": [
+        {
+          "containerPort": 15672,
+          "hostPort": 15672,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 5672,
+          "hostPort": 5672,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true
+    },
+    {
+      "name": "sdgp-backend-worker",
+      "image": "702913649645.dkr.ecr.us-east-2.amazonaws.com/sdgp-backend-worker",
+      "essential": true,
+      "command": [
+        "celery",
+        "-A",
+        "celery_app.celery_app:app",
+        "worker",
+        "--loglevel=info"
+      ],
+      "dependsOn": [
+        {
+          "containerName": "sdgp-backend-rabbitmq"
+        }
+      ]
+    }
+  ],
+  "taskRoleArn": "arn:aws:iam::702913649645:role/sdgpBackendTaskDefinition",
+  "executionRoleArn": "arn:aws:iam::702913649645:role/sdgpBackendTaskExecution",
+  "memory": "2048",
+  "cpu": "1024"
+}
