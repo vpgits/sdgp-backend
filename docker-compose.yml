@@ -20,8 +20,8 @@ services:
   rabbitmq:
     image: "rabbitmq:3.12-management"
     volumes:
-      - ./rabbitmq_definitions.json:/etc/rabbitmq/definitions.json
-      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
     environment:
       - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_management.load_definitions "/etc/rabbitmq/definitions.json"
     ports:
@@ -31,7 +31,7 @@ services:
   flower:
     image: mher/flower
     environment:
-      - CELERY_BROKER_URL=pyamqp://sdgp_admin:<password>@rabbitmq:15672/
+      - CELERY_BROKER_URL=pyamqp://sdgp_admin:59h%40WeMyBtfV%24YD@rabbitmq:15672/
 
     command: celery flower
     ports:
