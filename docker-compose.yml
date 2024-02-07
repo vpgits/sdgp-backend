@@ -4,7 +4,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: ./docker/fastapi/Dockerfile
+      dockerfile: ./fastapi_app/Dockerfile
     ports:
       - "8000:8000"
     depends_on:
@@ -13,12 +13,17 @@ services:
   worker:
     build:
       context: .
-      dockerfile: ./docker/celery/Dockerfile
+      dockerfile: ./celery_workers/Dockerfile
     depends_on:
       - rabbitmq
 
   rabbitmq:
-    image: "rabbitmq:3-management"
+    image: "rabbitmq:3.12-management"
+    volumes:
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    environment:
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_management.load_definitions "/etc/rabbitmq/definitions.json"
     ports:
       - "15672:15672"
       - "5672:5672"
@@ -26,7 +31,8 @@ services:
   flower:
     image: mher/flower
     environment:
-      - CELERY_BROKER_URL=pyamqp://guest@rabbitmq:5672/
+      - CELERY_BROKER_URL=pyamqp://sdgp_admin:59h%40WeMyBtfV%24YD@rabbitmq:15672/
+
     command: celery flower
     ports:
       - "5555:5555"
