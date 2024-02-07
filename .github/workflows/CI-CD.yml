@@ -1,4 +1,4 @@
-name: Build and push images to AWS ECR
+name: Build and push images to AWS ECR and then deploy to Amazon ECS
 permissions:
   id-token: write
   contents: read
@@ -45,7 +45,7 @@ jobs:
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: sdgp-backend-worker
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{github.sha}}
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG -f ./celery_workers/Dockerfile  .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
@@ -54,7 +54,7 @@ jobs:
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: sdgp-backend-web
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{github.sha}}
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG -f ./fastapi_app/Dockerfile  .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
@@ -62,7 +62,58 @@ jobs:
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: sdgp-backend-rabbitmq
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{github.sha}}
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG -f ./rabbitmq/Dockerfile  .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.ROLE_TO_ASSUME_AWS }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Update image for sdgp-backend-web
+        id: update-web
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: sdgp-backend-web
+          image: ${{ steps.login-ecr.outputs.registry }}/sdgp-backend-web:${{ github.sha }}
+
+      - name: Update image for sdgp-backend-rabbitmq
+        id: update-rabbitmq
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ steps.update-web.outputs.task-definition }}
+          container-name: sdgp-backend-rabbitmq
+          image: ${{ steps.login-ecr.outputs.registry }}/sdgp-backend-rabbitmq:${{ github.sha }}
+
+      - name: Update image for sdgp-backend-worker
+        id: update-worker
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ steps.update-rabbitmq.outputs.task-definition }}
+          container-name: sdgp-backend-worker
+          image: ${{ steps.login-ecr.outputs.registry }}/sdgp-backend-worker:${{ github.sha }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.update-worker.outputs.task-definition }}
+          service: sdgp-backend
+          cluster: sdgp-backend
+          wait-for-service-stability: true

@@ -15,12 +15,7 @@
         }
       ],
       "essential": true,
-      "command": ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
-      "dependsOn": [
-        {
-          "containerName": "sdgp-backend-rabbitmq"
-        }
-      ]
+      "command": ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     },
     {
       "name": "sdgp-backend-rabbitmq",
@@ -51,16 +46,15 @@
         "celery_app.celery_app:app",
         "worker",
         "--loglevel=info"
-      ],
-      "dependsOn": [
-        {
-          "containerName": "sdgp-backend-rabbitmq"
-        }
       ]
     }
   ],
-  "taskRoleArn": "arn:aws:iam::702913649645:role/sdgpBackendTaskDefinition",
-  "executionRoleArn": "arn:aws:iam::702913649645:role/sdgpBackendTaskExecution",
+  "executionRoleArn": "arn:aws:iam::702913649645:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::702913649645:role/ecsTaskRole",
+  "runtimePlatform": {
+    "operatingSystemFamily": "LINUX"
+  },
+  "requiresCompatibilities": ["FARGATE"],
   "memory": "2048",
   "cpu": "1024"
 }
