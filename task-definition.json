@@ -14,13 +14,22 @@
           "protocol": "tcp"
         }
       ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-create-group": "true",
+          "awslogs-group": "/ecs/sdgp-backend",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
       "essential": true,
       "command": ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     },
     {
       "name": "sdgp-backend-rabbitmq",
       "image": "702913649645.dkr.ecr.us-east-2.amazonaws.com/sdgp-backend-rabbitmq",
-      "cpu": 256,
+      "cpu": 512,
       "memory": 512,
       "portMappings": [
         {
@@ -34,6 +43,15 @@
           "protocol": "tcp"
         }
       ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-create-group": "true",
+          "awslogs-group": "/ecs/sdgp-backend",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
       "essential": true
     },
     {
@@ -46,7 +64,16 @@
         "celery_app.celery_app:app",
         "worker",
         "--loglevel=info"
-      ]
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-create-group": "true",
+          "awslogs-group": "/ecs/sdgp-backend",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
     }
   ],
   "executionRoleArn": "arn:aws:iam::702913649645:role/ecsTaskExecutionRole",
