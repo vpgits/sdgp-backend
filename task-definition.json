@@ -1,6 +1,6 @@
 {
   "family": "sdgp-backend",
-  "networkMode": "bridge",
+  "networkMode": "awsvpc",
   "containerDefinitions": [
     {
       "name": "sdgp-backend-web",
@@ -23,7 +23,6 @@
           "awslogs-stream-prefix": "ecs"
         }
       },
-      "links": ["sdgp-backend-rabbitmq"],
       "essential": true,
       "command": ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     },
@@ -74,8 +73,7 @@
           "awslogs-region": "us-east-2",
           "awslogs-stream-prefix": "ecs"
         }
-      },
-      "links": ["sdgp-backend-rabbitmq"]
+      }
     }
   ],
   "executionRoleArn": "arn:aws:iam::702913649645:role/ecsTaskExecutionRole",
