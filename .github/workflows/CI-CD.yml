@@ -14,16 +14,17 @@ jobs:
         uses: actions/checkout@v4
       - name: Create .env file
         run: |
-          echo SUPABASE_URL=${{ secrets.SUPABASE_URL }} >> .env
-          echo SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} >> .env
-          echo OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} >> .env
-          echo SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} >> .env
-          echo PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }} >> .env
-          echo PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }} >> .env
-          echo RUNPOD_WORKER_ID=${{ secrets.RUNPOD_WORKER_ID }} >> .env
-          echo RUNPOD_API_KEY=${{ secrets.RUNPOD_API_KEY }} >> .env
-          echo RUNPOD_API_SECRET=${{ secrets.RUNPOD_API_KEY }} >> .env
-          echo BROKER_URL=${{ secrets.BROKER_URL }} >> .env
+          echo SUPABASE_URL=${{ secrets.SUPABASE_URL }} >> ./celery_workers/.env
+          echo SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} >> ./celery_workers/.env
+          echo OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} >> ./celery_workers/.env
+          echo SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} >> ./celery_workers/.env
+          echo PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }} >> ./celery_workers/.env
+          echo PINECONE_INDEX_NAME=${{ secrets.PINECONE_INDEX_NAME }} >> ./celery_workers/.env
+          echo RUNPOD_WORKER_ID=${{ secrets.RUNPOD_WORKER_ID }} >> ./celery_workers/.env
+          echo RUNPOD_API_KEY=${{ secrets.RUNPOD_API_KEY }} >> ./celery_workers/.env
+          echo RUNPOD_API_SECRET=${{ secrets.RUNPOD_API_KEY }} >> ./celery_workers/.env
+          echo BROKER_URL=${{ secrets.BROKER_URL }} >> ./celery_workers/.env
+          echo BROKER_URL=${{ secrets.BROKER_URL }} >> ./celery_app/.env
       - name: Download gte/small
         run: |
           apt-get update && apt-get install -y git-lfs
