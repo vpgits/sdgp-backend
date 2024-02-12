@@ -38,3 +38,8 @@ services:
       - "5555:5555"
     depends_on:
       - rabbitmq
+
+  redis:
+    image: "redis:7.2-alpine"
+    ports:
+      - "6379:6379"

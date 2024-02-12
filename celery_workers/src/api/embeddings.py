@@ -1,12 +1,13 @@
 import logging
+from multiprocessing import context
 import os
 from dotenv import load_dotenv
-
+import safetensors
 import torch.nn.functional as F
 from torch import Tensor
 from transformers import AutoTokenizer, AutoModel
 from pinecone import Pinecone
-from api.parse import sliding_window
+from api.parse import get_pages, sliding_window
 
 load_dotenv()
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def generate_embedding_query(sentence: str):
-    return generate_embeddings([sentence])[0]
+    return generate_embeddings([sentence])
 
 
 def create_vector_index(pages: list[str], document_id: str):
@@ -62,9 +63,9 @@ def create_vector_index(pages: list[str], document_id: str):
 #         raise e
 
 
-def generate_embeddings(input_texts: list[str]) -> [list[float]]:
+def generate_embeddings(input_texts: list[str]) -> list[float]:
     try:
-        logging.info("Generating embeddings on geneerate_embeddings")
+        logging.info("Generating embeddings on generate_embeddings")
         tokenizer = AutoTokenizer.from_pretrained("./api/gte-small/")
         model = AutoModel.from_pretrained("./api/gte-small/")
         batch_dict = tokenizer(
@@ -94,10 +95,43 @@ def add_embeddings_to_pinecone(embeddings: list[dict], document_id: str):
     try:
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"), pool_threads=30)
-        async_results = [index.upsert(vectors=embeddings,namespace=document_id, async_req=True)]
+        async_results = [
+            index.upsert(vectors=embeddings, namespace=document_id, async_req=True)
+        ]
         [async_result.get() for async_result in async_results]
     except Exception as e:
         logger.error(
             f"An exception has occurred when adding embeddings to pinecone: {str(e)}"
         )
+        raise e
+
+
+def get_similar_embeddings(sentence: str, document_id: str, pages: list[str]):
+    try:
+        sentence_embedding = generate_embedding_query(sentence)[0]
+        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+        index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"))
+        results = index.query(
+            vector=sentence_embedding,
+            namespace=document_id,
+            top_k=3,
+        )
+        matches = results.get("matches")
+        return extract_context(matches, pages)
+    except Exception as e:
+        logger.error(
+            f"An exception has occurred when getting similar embeddings: {str(e)}"
+        )
+        raise e
+
+
+def extract_context(matches: list[any], pages: list[str]):
+    try:
+        context_ids = [match.get("id").split(":")[1] for match in matches]
+        chunks = sliding_window(pages)
+        context = [chunks[int(context_id)] for context_id in context_ids]
+        context = "".join(context)
+        return context
+    except Exception as e:
+        logger.error(f"An exception has occurred when extracting context: {str(e)}")
         raise e
