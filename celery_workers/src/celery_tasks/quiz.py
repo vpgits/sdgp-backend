@@ -1,8 +1,14 @@
 import logging
+from multiprocessing import context
 import os
 import requests
 import json
 from api.parse import get_pages
+from api.embeddings import (
+    generate_embedding_query,
+    get_similar_embeddings,
+)
+from api.summary import create_key_points_json
 from config.supabase_client import get_supabase_client
 from supabase import Client
 from celery_app.celery_app import app
@@ -24,7 +30,17 @@ def quiz_worker(self, quiz_id, access_token, refresh_token):
         return {"message": f"failed: {str(e)}"}
 
 
-def quiz_worker_helper(task, supabase: Client, quiz_id: str):
+@app.task(bind=True, name="rapid-quiz")
+def rapid_quiz_worker(self, quiz_id, access_token, refresh_token):
+    try:
+        supabase_client = get_supabase_client(access_token, refresh_token)
+        rapid_quiz_worker_helper(self, supabase_client, quiz_id)
+        return {"message": "success"}
+    except Exception as e:
+        return {"message": f"failed: {str(e)}"}
+
+
+def rapid_quiz_worker_helper(task, supabase: Client, quiz_id: str):
     try:
         data = supabase.from_("quiz").select("*").eq("id", quiz_id).execute()
         document_id = data.data[0]["document_id"]
@@ -38,22 +54,14 @@ def quiz_worker_helper(task, supabase: Client, quiz_id: str):
                 llm_response = response.get("output")
                 mcq = parse_runpod_response(llm_response)
                 type(mcq)
-                data = supabase.from_("questions").insert({"data": mcq}).execute()
-                logging.info(data)
-                question_id = data.data[0]["id"]
-                data = (
-                    supabase.from_("quizInstance")
-                    .insert([{"quiz_id": quiz_id, "question_id": question_id}])
-                    .execute()
-                )
+                supabase.from_("questions").insert(
+                    {"data": mcq, "quiz_id": quiz_id, "document_id": document_id}
+                ).execute()
                 count += 1
                 task.update_state(
                     state="PROGRESS",
                     meta={"status": f"Completed {count}/{len(pages)} questions"},
                 )
-                supabase.from_("quiz").update({"generating": False}).eq(
-                    "id", quiz_id
-                ).execute()
             else:
                 task.update_state(
                     state="PROGRESS",
@@ -61,6 +69,52 @@ def quiz_worker_helper(task, supabase: Client, quiz_id: str):
                         "status": f"Failed to generate question {response.get('output')}"
                     },
                 )
+        supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
+    except Exception as e:
+        raise e
+
+
+def quiz_worker_helper(task, supabase: Client, quiz_id: str):
+    try:
+        data = supabase.from_("quiz").select("*").eq("id", quiz_id).execute()
+        document_id = data.data[0]["document_id"]
+        num_of_questions = data.data[0]["num_of_questions"]
+        remarks = data.data[0]["remarks"]
+        task.update_state(state="PROGRESS", meta={"status": "Getting pages"})
+        pages = get_pages(supabase, document_id)
+        task.update_state(state="PROGRESS", meta={"status": "Creating key points"})
+        key_points = create_key_points_json(
+            text=pages, subtext=remarks, num_of_questions=num_of_questions
+        )
+        supabase.from_("key_points").insert(
+            {"data": key_points, "quiz_id": quiz_id}
+        ).execute()
+        task.update_state(state="PROGRESS", meta={"status": "Generating questions"})
+        key_points = json.loads(key_points).get("key_points")
+        count = 0
+        for key_point in key_points:
+            context = get_similar_embeddings(key_point, document_id, pages)
+            response = call_runpod_endpoint(context)
+            if response.get("status") == "COMPLETED":
+                llm_response = response.get("output")
+                mcq = parse_runpod_response(llm_response)
+                type(mcq)
+                supabase.from_("questions").insert(
+                    {"data": mcq, "quiz_id": quiz_id, "document_id": document_id}
+                ).execute()
+                count += 1
+                task.update_state(
+                    state="PROGRESS",
+                    meta={"status": f"Completed {count}/{len(pages)} questions"},
+                )
+            else:
+                task.update_state(
+                    state="PROGRESS",
+                    meta={
+                        "status": f"Failed to generate question {response.get('output')}"
+                    },
+                )
+        supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
     except Exception as e:
         raise e
 
@@ -80,13 +134,12 @@ def call_runpod_endpoint(input_text: str):
                 """[INST]### Instruction : Generate a multiple-choice question (MCQ) based on the core concept identified in a given text. This MCQ should include one correct answer and three incorrect but plausible answers, crafted to assess comprehension of the concept. Format your output as a JSON object following a specified schema, emphasizing the logical extraction and representation of the text's main idea through a question and answers format. This task requires understanding and distilling the essence of the input text, applying it to create an educational or evaluative MCQ relevant to the discussed concept.
 Output Format Schema:
 The output should be a JSON object with a specific structure, including fields for the question, the correct answer, and an array of incorrect answers, all requiring strings.
-{\"type\": \"object\", \"properties\": {\"Output\": {\"type\": \"object\", \"properties\": {\"question\": {\"type\": \"string\"}, \"correct_answer\": {\"type\": \"string\"}, \"incorrect_answers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"question\", \"correct_answer\", \"incorrect_answers\"]}}, \"required\": [\"Output\"]}
 Task Objective:
 Analyze the text to identify the core concept.
 Formulate a question that encapsulates this concept.
 Determine one correct answer and generate three plausible incorrect answers.
 Adhere to the provided JSON schema for your output.
-"""
+.The output should be formatted as a json in the below format." + "{\"type\": \"object\", \"properties\": {\"Output\": {\"type\": \"object\", \"properties\": {\"question\": {\"type\": \"string\"}, \"correct_answer\": {\"type\": \"string\"}, \"incorrect_answers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"question\", \"correct_answer\", \"incorrect_answers\"]}}, \"required\": [\"Output\"]}"""
                 + f"### Input :{input_text.encode('utf-8')}.[/INST]"
                 + "### Output :"
             )
@@ -105,3 +158,15 @@ def parse_runpod_response(llm_response: str) -> str:
         output_json = json.loads(json_str)
         mcq = output_json.get("Output")
         return mcq
+
+
+# """[INST]### Instruction : Generate a multiple-choice question (MCQ) based on the core concept identified in a given text. This MCQ should include one correct answer and three incorrect but plausible answers, crafted to assess comprehension of the concept. Format your output as a JSON object following a specified schema, emphasizing the logical extraction and representation of the text's main idea through a question and answers format. This task requires understanding and distilling the essence of the input text, applying it to create an educational or evaluative MCQ relevant to the discussed concept.
+# Output Format Schema:
+# The output should be a JSON object with a specific structure, including fields for the question, the correct answer, and an array of incorrect answers, all requiring strings.
+# {\"type\": \"object\", \"properties\": {\"Output\": {\"type\": \"object\", \"properties\": {\"question\": {\"type\": \"string\"}, \"correct_answer\": {\"type\": \"string\"}, \"incorrect_answers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"question\", \"correct_answer\", \"incorrect_answers\"]}}, \"required\": [\"Output\"]}
+# Task Objective:
+# Analyze the text to identify the core concept.
+# Formulate a question that encapsulates this concept.
+# Determine one correct answer and generate three plausible incorrect answers.
+# Adhere to the provided JSON schema for your output.
+# """

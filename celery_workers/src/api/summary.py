@@ -1,58 +1,64 @@
 import json
 import logging
+from re import sub
 from openai import OpenAI
 from supabase import Client
 from config.supabase_client import get_supabase_client
 
+# user_id: str,
+# supabase_client: Client,
 
-def create_summary_json(
-        text: list[str], document_id: str, user_id: str, supabase_client: Client, subtext=None
+
+def create_key_points_json(
+    text: list[str],
+    subtext=None,
+    num_of_questions=10,
 ):
     # this openai function takes in a string and outputs a summary gpt-4-1106-preview
     try:
-        summary = (
-            supabase_client.table("documents")
-            .select("summary")
-            .eq("id", document_id)
-            .execute()
+        # summary = (
+        #     supabase_client.table("documents")
+        #     .select("summary")
+        #     .eq("id", document_id)
+        #     .execute()
+        # )
+        # if summary.data[0].get("summary") is not None:
+        #     logging.info("Summary already exists!")
+        # else:
+        logging.info("Attempting to generate key points on context " + subtext)
+        client = OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo-1106",
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""You are to find key points at a user given text. 
+                            The text are from lecture materials. refrain from including personal
+                            information or any other information that is not related to
+                            the subject as key points. key points should be simple and short.
+                            {f"These are some user given specific instructions {subtext}" if subtext is not None else ""}
+                            Generate only the best {num_of_questions} key points.
+                            Return a JSON. The JSON should only have an 
+                            array with only label called "key_points" """,
+                },
+                {"role": "user", "content": f"{text}. " ""},
+            ],
         )
-        if summary.data[0].get("summary") is not None:
-            logging.info("Summary already exists!")
-        else:
-            logging.info("Attempting to generate summary")
-            client = OpenAI()
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo-1106",
-                response_format={"type": "json_object"},
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You are to find key points at a user given text. 
-                                                                text are from lecture materials. refrain from including personal
-                                                                information or any other information that is not related to
-                                                                the subject as key points. key points should be simple.
-                                                                Return a JSON. The JSON should only have an 
-                                                                array with only label called "key_points" """,
-                    },
-                    {"role": "user", "content": f"{text}. {subtext}" ""},
-                ],
-            )
-            supabase_client.table("documents").upsert(
-                    {
-                        "summary": json.loads(response.choices[0].message.content),
-                        "id": document_id,
-                        "user_id": user_id,
-                    }
-                ).execute()
-            logging.info(f"Summary added successfully! document_id: {document_id}")
+        # supabase_client.table("documents").upsert(
+        #         {
+        #             "summary": json.loads(response.choices[0].message.content),
+        #             "id": document_id,
+        #             "user_id": user_id,
+        #         }
+        #     ).execute()
+        logging.info(f"Key points generated successfully!")
+        return response.choices[0].message.content
     except Exception as e:
         logging.error(str(e))
-        raise e
 
 
-def create_context_summary(
-        key_point_id: str, access_token: str, refresh_token: str
-):
+def create_context_summary(key_point_id: str, access_token: str, refresh_token: str):
     try:
         supabase: Client = get_supabase_client(access_token, refresh_token)
         response = (
@@ -101,4 +107,3 @@ def create_context_summary(
             logging.info("Summary already exists!")
     except Exception as e:
         logging.error(str(e))
-        raise e

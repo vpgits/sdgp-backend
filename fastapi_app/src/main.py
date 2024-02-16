@@ -65,16 +65,23 @@ async def quiz(
     }
 
 
+@app.post("/rapid-quiz/")
+async def rapid_quiz(
+    request: QuizBody, tokens: tuple[str, str] = Depends(extract_header_auth_tokens)
+):
+    task = celery_app.send_task("rapid-quiz", args=[request.quiz_id, *tokens])
+    return {
+        "task_id": task.id,
+        "message": "Task has been sent to the background worker",
+    }
+
+
 @app.get("/{worker_name}/{task_id}")
 async def check_task_status(worker_name: str, task_id: str):
-    worker_functions = ["preprocess", "generate_mcq", "ticktock", "quiz"]
+    worker_functions = ["preprocess", "generate_mcq", "ticktock", "quiz", "rapid-quiz"]
 
     if worker_name not in worker_functions:
         raise HTTPException(status_code=404, detail="Worker not found")
 
     task = AsyncResult(task_id, app=celery_app)
-    return {
-        "task_id": task_id,
-        "task_status": task.status,
-        "task_result": task.result if task.ready() else None,
-    }
+    return {"task_id": task_id, "task_status": task.state, "task_result": task.info}

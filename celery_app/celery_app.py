@@ -10,7 +10,9 @@ app = Celery(
     broker=os.getenv(
         "BROKER_URL"
     ),  # Use the service name as defined in docker-compose.yml
-    backend="rpc://",
+    backend=os.getenv(
+        "BACKEND_URL"
+    ),  # Use the service name as defined in docker-compose.yml
     include=[
         "celery_tasks.preprocess",
         "celery_tasks.generate_mcq",
