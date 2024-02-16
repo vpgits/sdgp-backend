@@ -1,7 +1,7 @@
 from celery_app.celery_app import app
 from api.database import extract_context
 from config.supabase_client import get_supabase_client, get_current_user
-from api.parse import parse_pdf_pages, does_pages_exist, get_pages
+from api.parse import parse_pages, does_pages_exist, get_pages
 from api.embeddings import create_vector_index
 from supabase import Client
 import logging
@@ -36,7 +36,7 @@ def preprocess_worker_helper(
             task.update_state(
                 state="PROGRESS", meta={"status": "Extracting pages from PDF"}
             )
-            parse_pdf_pages(path, supabase_client, document_id)
+            parse_pages(path, supabase_client, document_id)
         pages = get_pages(supabase_client, document_id)
         if pages:
             task.update_state(
