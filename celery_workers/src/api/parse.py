@@ -1,20 +1,24 @@
 import logging
 import re
+import os
+import pytesseract
 from io import BytesIO
 from PyPDF2 import PdfReader
-import os
 from supabase import Client
+from docx import Document
+from pptx import Presentation
 
 
-def parse_pdf_pages(path: str, supabase_client: Client, document_id: str) -> None:
+def parse_pages(path: str, supabase_client: Client, document_id: str) -> None:
     # this function will parse an entire pdf into an array of pages
     try:
         download_file(
             supabase_client, path
         )  # this function will download a file from supabase storage
-        pages = read_pdf(
+        pages = file_type(
             path
-        )  # Parse the PDF file and return a list of text from each page
+            ) 
+         # this function will return the type of file
         add_pages_to_supabase(
             supabase_client, pages, document_id
         )  # this function will add the pages to supabase
@@ -23,6 +27,23 @@ def parse_pdf_pages(path: str, supabase_client: Client, document_id: str) -> Non
     except Exception as e:
         logging.error(str(e))
         raise e
+
+
+def file_type(path: str) -> str:
+    # this function will return the type of file
+    try:
+        if path.endswith(".pdf"):
+            return "pdf"
+        elif path.endswith(".docx"):
+            return "docx"
+        elif path.endswith(".pptx"):
+            return "pptx"
+        else:
+            return "unsupported"
+    except Exception as e:
+        logging.error("Error while getting file type: " + str(e))
+        raise e
+
 
 
 def does_pages_exist(supabase: Client, document_id: str) -> bool:
@@ -62,6 +83,39 @@ def read_pdf(path: str) -> list[str]:
     except Exception as e:
         logging.error(f"Error parsing PDF: {str(e)}")
         raise
+
+def read_docx(path: str) -> list[str]:
+    # Parse the DOCX file and return a list of text from each page
+    pages = []
+    try:
+        doc = Document(f"./resources/{path}")
+        for para in doc.paragraphs:
+            pages.append(para.text)
+        return pages
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Error parsing DOCX: {str(e)}")
+        raise
+
+def read_pptx(path: str) -> list[str]:
+    # Parse the PPTX file and return a list of text from each page
+    pages = []
+    try:
+        prs = Presentation(f"./resources/{path}")
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "text"):
+                    pages.append(shape.text)
+        return pages
+    except FileNotFoundError as e:
+        logging.error(f"File not found: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"Error parsing PPTX: {str(e)}")
+        raise
+
 
 
 def add_pages_to_supabase(
