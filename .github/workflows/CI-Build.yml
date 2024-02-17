@@ -29,6 +29,8 @@ jobs:
           echo GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} >> ./celery_workers/.env
           echo BROKER_URL=${{ secrets.BROKER_URL }} >> ./celery_workers/.env
           echo BACKEND_URL=${{ secrets.BACKEND_URL }} >> ./celery_app/.env
+          echo BROKER_URL=${{ secrets.BROKER_URL }} >> ./celery_app/.env
+          
 
       - name: Download gte/small
         run: |
