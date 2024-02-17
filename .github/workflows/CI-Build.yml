@@ -37,7 +37,7 @@ jobs:
           git clone https://huggingface.co/thenlper/gte-small ./celery_workers/src/api/gte-small
 
       - name: Login to private image registry
-        run: docker login -u ${{ secrets.IMAGE_REGISTRY_USERNAME }} -p ${{ secrets.IMAGE_REGISTRY_USERNAME }} backend-quizzifyme.venura.dev
+        run: docker login -u ${{ secrets.IMAGE_REGISTRY_USERNAME }} -p ${{ secrets.IMAGE_REGISTRY_PASSWORD }} backend-quizzifyme.venura.dev
 
       - name: Build, tag, and push celery worker docker image to Amazon ECR
         run: |
