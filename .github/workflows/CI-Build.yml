@@ -39,12 +39,12 @@ jobs:
       - name: Login to private image registry
         run: docker login -u ${{ secrets.IMAGE_REGISTRY_USERNAME }} -p ${{ secrets.IMAGE_REGISTRY_PASSWORD }} backend-quizzifyme.venura.dev
 
-      - name: Build, tag, and push celery worker docker image to Amazon ECR
+      - name: Build, tag, and push celery worker docker image to private registry
         run: |
-          docker build -t sdgp-backend-worker:latest  -f ./celery_workers/Dockerfile  .
+          docker build -t backend-quizzifyme.venura.dev/sdgp-backend-worker:latest  -f ./celery_workers/Dockerfile  .
           docker push backend-quizzifyme.venura.dev/sdgp-backend-worker:latest
 
-      - name: Build, tag, and push fastapi docker image to Amazon ECR
+      - name: Build, tag, and push fastapi docker image to private registry
         run: |
-          docker build -t sdgp-backend-web:latest  -f ./fastapi_app/Dockerfile  .
+          docker build -t backend-quizzifyme.venura.dev/sdgp-backend-web:latest  -f ./fastapi_app/Dockerfile  .
           docker push backend-quizzifyme.venura.dev/sdgp-backend-web:latest
