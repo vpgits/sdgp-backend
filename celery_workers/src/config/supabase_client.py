@@ -9,7 +9,7 @@ def get_supabase_client(access_token: str, refresh_token: str) -> Client:
     key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     key1 = os.environ.get("SUPABASE_KEY")
 
-    if not url or not key:
+    if not url or not key1:
         logging.error("Supabase URL or Key is not set in environment variables.")
         raise ValueError("Supabase URL or Key is not set in environment variables.")
 
@@ -18,7 +18,7 @@ def get_supabase_client(access_token: str, refresh_token: str) -> Client:
     return supabase
 
 
-def get_current_user(supabase_client: Client, access_token:str) -> str:
+def get_current_user(supabase_client: Client, access_token: str) -> str:
     user = supabase_client.auth.get_user(access_token)
     if user is None:
         raise ValueError("User is not logged in.")
