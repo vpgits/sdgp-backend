@@ -2,7 +2,7 @@ import json
 import requests
 from dotenv import load_dotenv
 import os
-from api.database import get_supabase_client
+from celery_workers.src.api.database import get_supabase_client
 from supabase import Client
 import logging
 

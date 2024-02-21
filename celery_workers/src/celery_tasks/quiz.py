@@ -1,15 +1,15 @@
 import logging
 from multiprocessing import context
 import os
+from typing import ByteString
 import requests
 import json
-from api.parse import get_pages
-from api.embeddings import (
-    generate_embedding_query,
+from celery_workers.src.api.parse import get_pages, sliding_window
+from celery_workers.src.api.embeddings import (
     get_similar_embeddings,
 )
-from api.summary import create_key_points_json
-from config.supabase_client import get_supabase_client
+from celery_workers.src.api.summary import create_key_points_json
+from celery_workers.src.config.supabase_client import get_supabase_client
 from supabase import Client
 from celery_app.celery_app import app
 from dotenv import load_dotenv
@@ -25,6 +25,7 @@ def quiz_worker(self, quiz_id, access_token, refresh_token):
     try:
         supabase_client = get_supabase_client(access_token, refresh_token)
         quiz_worker_helper(self, supabase_client, quiz_id)
+        supabase_client.auth.sign_out()
         return {"message": "success"}
     except Exception as e:
         return {"message": f"failed: {str(e)}"}
@@ -35,6 +36,7 @@ def rapid_quiz_worker(self, quiz_id, access_token, refresh_token):
     try:
         supabase_client = get_supabase_client(access_token, refresh_token)
         rapid_quiz_worker_helper(self, supabase_client, quiz_id)
+        supabase_client.auth.sign_out()
         return {"message": "success"}
     except Exception as e:
         return {"message": f"failed: {str(e)}"}
@@ -48,12 +50,14 @@ def rapid_quiz_worker_helper(task, supabase: Client, quiz_id: str):
         pages = get_pages(supabase, document_id)
         task.update_state(state="PROGRESS", meta={"status": "Generating questions"})
         count = 0
-        for page in pages[:5]:
+        pages = sliding_window(pages)
+        for page in pages:
             response = call_runpod_endpoint(page)
             if response.get("status") == "COMPLETED":
                 llm_response = response.get("output")
+                logging.info(llm_response)
                 mcq = parse_runpod_response(llm_response)
-                type(mcq)
+                # type(mcq)
                 supabase.from_("questions").insert(
                     {"data": mcq, "quiz_id": quiz_id, "document_id": document_id}
                 ).execute()
@@ -105,7 +109,7 @@ def quiz_worker_helper(task, supabase: Client, quiz_id: str):
                 count += 1
                 task.update_state(
                     state="PROGRESS",
-                    meta={"status": f"Completed {count}/{len(pages)} questions"},
+                    meta={"status": f"Completed {count}/{len(key_points)} questions"},
                 )
             else:
                 task.update_state(
@@ -138,9 +142,9 @@ Task Objective:
 Analyze the text to identify the core concept.
 Formulate a question that encapsulates this concept.
 Determine one correct answer and generate three plausible incorrect answers.
-Adhere to the provided JSON schema for your output.
+Adhere to the provided JSON schema for your output. Make sure not to generate escape characters.
 .The output should be formatted as a json in the below format." + "{\"type\": \"object\", \"properties\": {\"Output\": {\"type\": \"object\", \"properties\": {\"question\": {\"type\": \"string\"}, \"correct_answer\": {\"type\": \"string\"}, \"incorrect_answers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"question\", \"correct_answer\", \"incorrect_answers\"]}}, \"required\": [\"Output\"]}"""
-                + f"### Input :{input_text.encode('utf-8')}.[/INST]"
+                + f"### Input :{input_text}.[/INST]"
                 + "### Output :"
             )
         }

@@ -1,8 +1,8 @@
 from celery_app.celery_app import app
-from api.database import extract_context
-from config.supabase_client import get_supabase_client, get_current_user
-from api.parse import parse_pages, does_pages_exist, get_pages
-from api.embeddings import create_vector_index
+from celery_workers.src.api.database import extract_context
+from celery_workers.src.config.supabase_client import get_supabase_client, get_current_user
+from celery_workers.src.api.parse import parse_pages, does_pages_exist, get_pages
+from celery_workers.src.api.embeddings import create_vector_index
 from supabase import Client
 import logging
 import os
@@ -18,6 +18,7 @@ def preprocess_worker(self, path, document_id, access_token, refresh_token):
         supabase_client: Client = get_supabase_client(access_token, refresh_token)
         user_id: str = get_current_user(supabase_client, access_token)
         preprocess_worker_helper(self, supabase_client, path, document_id, user_id)
+        supabase_client.auth.sign_out()
         return {"message": "success"}
     except Exception as e:
         logger.error("An exception has occurred on preprocess_worker: {str(e)}")

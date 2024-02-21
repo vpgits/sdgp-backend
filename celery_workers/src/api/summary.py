@@ -3,7 +3,7 @@ import logging
 from re import sub
 from openai import OpenAI
 from supabase import Client
-from config.supabase_client import get_supabase_client
+from celery_workers.src.config.supabase_client import get_supabase_client
 
 # user_id: str,
 # supabase_client: Client,

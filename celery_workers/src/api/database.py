@@ -1,12 +1,12 @@
 import logging
 import os
 from supabase import Client
-from api.embeddings import generate_embedding_query
+from celery_workers.src.api.embeddings import generate_embedding_query
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from pinecone.core.client.model.query_response import QueryResponse
-from config.supabase_client import get_supabase_client
-from api.parse import get_pages, sliding_window
+from celery_workers.src.config.supabase_client import get_supabase_client
+from celery_workers.src.api.parse import get_pages, sliding_window
 
 load_dotenv()
 

@@ -1,6 +1,6 @@
 from celery_app.celery_app import app
-from api.summary import create_context_summary
-from api.huggingface import generate_mcq
+from celery_workers.src.api.summary import create_context_summary
+from celery_workers.src.api.huggingface import generate_mcq
 import logging
 
 

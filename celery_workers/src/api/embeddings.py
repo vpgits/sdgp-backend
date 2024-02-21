@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from transformers import AutoTokenizer, AutoModel
 from pinecone import Pinecone
-from api.parse import get_pages, sliding_window
+from celery_workers.src.api.parse import get_pages, sliding_window
 
 load_dotenv()
 
@@ -66,8 +66,8 @@ def create_vector_index(pages: list[str], document_id: str):
 def generate_embeddings(input_texts: list[str]) -> list[float]:
     try:
         logging.info("Generating embeddings on generate_embeddings")
-        tokenizer = AutoTokenizer.from_pretrained("./api/gte-small/")
-        model = AutoModel.from_pretrained("./api/gte-small/")
+        tokenizer = AutoTokenizer.from_pretrained("./celery_workers/src/api/gte-small/")
+        model = AutoModel.from_pretrained("./celery_workers/src/api/gte-small/")
         batch_dict = tokenizer(
             input_texts,
             max_length=512,
