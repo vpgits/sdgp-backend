@@ -1,4 +1,14 @@
 from openai import OpenAI
+from pydantic import BaseModel, Field
+import json
+
+class DocumentSummary(BaseModel):
+    title:str = Field(..., description="Title of the user text")
+    summary:str = Field(..., description="Summary of the user text")
+
+class QuizSummary(BaseModel):
+    title:str = Field(..., description="Title of the user text")
+    summary:str = Field(..., description="Summary of the user text")    
 
 
 def create_mcq_json(key_point="what is encapsulation", context=None):
@@ -17,3 +27,70 @@ def create_mcq_json(key_point="what is encapsulation", context=None):
         ]
     )
     return response.choices[0].message.content
+
+def quiz_topic():
+    client = openai.OpenAI(
+    base_url="https://api.fireworks.ai/inference/v1",
+    api_key="",
+    )
+    chat_completion = client.chat.completions.create(
+    model="accounts/fireworks/models/mixtral-8x7b-instruct",
+    response_format={"type": "json_object", "schema": DocumentSummary.model_json_schema()},
+    messages=[
+        {"role": "system",
+        "content": "You are to analyze a JSON. Generate a summary based on the given JSON. The JSON contains an array of questions for a quiz.  Create a brief summary without spoling what's in the JSON."
+                    "Make sure to create an appropriate summary and please refrain from disclosing personal or sensitive information. Create an appropriate title for the quiz. Return only a JSON of "
+                    "field summary and keywords which contains the title and the summary . Reply just in one JSON. JSON schema is "+str({
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+        "title": {
+                 "type": "string"
+                 },
+        "summary": {
+                "type": "string"
+                   }
+                      },
+         "required": ["title", "summary"]
+        },)},{
+            "role": "user",
+            "content": ''.join([json.dumps(q) for q in quiz])
+            }
+       ],
+    )
+    return chat_completion.choices[0].message.content
+
+
+def quiz_summary():
+    client = openai.OpenAI(
+    base_url="https://api.fireworks.ai/inference/v1",
+    api_key="",
+    )
+    chat_completion = client.chat.completions.create(
+    model="accounts/fireworks/models/mixtral-8x7b-instruct",
+    response_format={"type": "json_object", "schema": DocumentSummary.model_json_schema()},
+    messages=[
+        {
+            "role": "system",
+            "content": "You are to analyze a document.Identify key areas where the document context is related to.Key areas have to be generic key areas and not to be extracted directly from the document. Generate a summary based on the document "
+                        "Make sure to create an appropriate summary and please refrain from disclosing personal or sensitive information. Return only a JSON of "
+                        "field summary and keywords which contains the summary and key areas respectively. Reply just in one JSON. JSON schema is "+str({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "title": {
+                "type": "string"
+                },
+                "summary": {
+                "type": "string"
+                }
+            },
+            "required": ["title", "summary"]
+            },)
+        },{
+            "role": "user",
+            "content": "".join(pages)
+          }
+       ],
+   )
+    return chat_completion.choices[0].message.content   
