@@ -15,7 +15,7 @@ def download_file(path: str, access_token: str, refresh_token: str):
     supabase: Client = get_supabase_client(access_token, refresh_token)
     file_path = f"./resources/{path}"
     try:
-        res = supabase.storage.from_("public/pdf").download(path)
+        res = supabase.storage.from_("pdf").download(path)
         logging.info("download_file reading")
         # if the ./resources folder does not exist, create it
         os.makedirs(os.path.dirname(file_path), exist_ok=True)

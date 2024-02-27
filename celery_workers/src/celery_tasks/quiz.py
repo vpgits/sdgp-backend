@@ -1,9 +1,8 @@
 import logging
-from multiprocessing import context
 import os
-from typing import ByteString
 import requests
 import json
+from celery_workers.src.api.openai import create_quiz_summary
 from celery_workers.src.api.parse import get_pages, sliding_window
 from celery_workers.src.api.embeddings import (
     get_similar_embeddings,
@@ -51,6 +50,7 @@ def rapid_quiz_worker_helper(task, supabase: Client, quiz_id: str):
         task.update_state(state="PROGRESS", meta={"status": "Generating questions"})
         count = 0
         pages = sliding_window(pages)
+        questions = []
         for page in pages:
             response = call_runpod_endpoint(page)
             if response.get("status") == "COMPLETED":
@@ -66,6 +66,7 @@ def rapid_quiz_worker_helper(task, supabase: Client, quiz_id: str):
                     state="PROGRESS",
                     meta={"status": f"Completed {count}/{len(pages)} questions"},
                 )
+                questions.append(mcq)
             else:
                 task.update_state(
                     state="PROGRESS",
@@ -73,7 +74,9 @@ def rapid_quiz_worker_helper(task, supabase: Client, quiz_id: str):
                         "status": f"Failed to generate question {response.get('output')}"
                     },
                 )
+
         supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
+        create_quiz_summary_context(supabase, quiz_id, questions)
     except Exception as e:
         raise e
 
@@ -96,6 +99,7 @@ def quiz_worker_helper(task, supabase: Client, quiz_id: str):
         task.update_state(state="PROGRESS", meta={"status": "Generating questions"})
         key_points = json.loads(key_points).get("key_points")
         count = 0
+        questions = []
         for key_point in key_points:
             context = get_similar_embeddings(key_point, document_id, pages)
             response = call_runpod_endpoint(context)
@@ -111,6 +115,7 @@ def quiz_worker_helper(task, supabase: Client, quiz_id: str):
                     state="PROGRESS",
                     meta={"status": f"Completed {count}/{len(key_points)} questions"},
                 )
+                questions.append(mcq)
             else:
                 task.update_state(
                     state="PROGRESS",
@@ -119,6 +124,7 @@ def quiz_worker_helper(task, supabase: Client, quiz_id: str):
                     },
                 )
         supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
+        create_quiz_summary_context(supabase, quiz_id, questions)
     except Exception as e:
         raise e
 
@@ -162,6 +168,19 @@ def parse_runpod_response(llm_response: str) -> str:
         output_json = json.loads(json_str)
         mcq = output_json.get("Output")
         return mcq
+
+
+def create_quiz_summary_context(
+    supabase_client: Client, quiz_id: str, questions: list[str]
+):
+    try:
+        response = create_quiz_summary(questions)
+        response = json.loads(response)
+        supabase_client.from_("quiz").update({"summary": json.dumps(response)}).eq(
+            "id", quiz_id
+        ).execute()
+    except Exception as e:
+        raise e
 
 
 # """[INST]### Instruction : Generate a multiple-choice question (MCQ) based on the core concept identified in a given text. This MCQ should include one correct answer and three incorrect but plausible answers, crafted to assess comprehension of the concept. Format your output as a JSON object following a specified schema, emphasizing the logical extraction and representation of the text's main idea through a question and answers format. This task requires understanding and distilling the essence of the input text, applying it to create an educational or evaluative MCQ relevant to the discussed concept.
