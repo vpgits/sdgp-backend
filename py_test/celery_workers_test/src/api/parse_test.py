@@ -4,12 +4,12 @@ from celery_workers.src.api.parse import parse_pages
 def test_parse_pages_success(mocker):
     # Mocking the necessary dependencies
     supabase_client_mock = mocker.Mock()
-    download_file_mock = mocker.patch('api.parse.download_file')
-    file_type_mock = mocker.patch('api.parse.file_type')
-    add_pages_to_supabase_mock = mocker.patch('api.parse.add_pages_to_supabase')
+    download_file_mock = mocker.patch('celery_workers.src.api.parse.download_file')
+    file_type_mock = mocker.patch('celery_workers.src.api.parse.file_type')
+    add_pages_to_supabase_mock = mocker.patch('celery_workers.src.api.parse.add_pages_to_supabase')
 
     # Calling the function under test
-    parse_pages('GitCheatSheet.pdf', supabase_client_mock, 'document_id')
+    parse_pages(path='GitCheatSheet.pdf', supabase_client=supabase_client_mock, document_id='document_id')
 
     # Asserting the function calls
     download_file_mock.assert_called_once_with(supabase_client_mock, 'GitCheatSheet.pdf', 'document_id')
@@ -19,7 +19,7 @@ def test_parse_pages_success(mocker):
 def test_parse_pages_file_not_found(mocker, caplog):
     # Mocking the necessary dependencies
     supabase_client_mock = mocker.Mock()
-    download_file_mock = mocker.patch('api.parse.download_file')
+    download_file_mock = mocker.patch('celery_workers.src.api.parse.download_file')
     download_file_mock.side_effect = FileNotFoundError
 
     # Calling the function under test
@@ -31,7 +31,7 @@ def test_parse_pages_file_not_found(mocker, caplog):
 def test_parse_pages_exception(mocker, caplog):
     # Mocking the necessary dependencies
     supabase_client_mock = mocker.Mock()
-    download_file_mock = mocker.patch('api.parse.download_file')
+    download_file_mock = mocker.patch('celery_workers.src.api.parse.download_file')
     download_file_mock.side_effect = Exception("Some error")
 
     # Calling the function under test
