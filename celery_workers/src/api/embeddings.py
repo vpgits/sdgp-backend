@@ -26,7 +26,11 @@ def create_vector_index(pages: list[str], document_id: str):
     try:
         chunks = sliding_window(pages)
         logger.info("Generating embeddings")
-        embeddings = generate_embeddings(chunks)
+        embeddings = []
+        chunk_size = 10
+        for i in range(0, len(chunks), chunk_size):
+            chunk_subset = chunks[i : i + chunk_size]
+            embeddings.extend(generate_embeddings(chunk_subset))
         logger.info(f"{len(chunks)} Embeddings generated")
         logger.info("Adding embeddings to Pinecone")
         vectors = list(
