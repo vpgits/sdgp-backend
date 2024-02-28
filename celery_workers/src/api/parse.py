@@ -174,8 +174,7 @@ def create_document_summary_context(
 ):
     try:
         response = create_document_summary(pages)
-        response = json.loads(response)
-        supabase_client.table("documents").update({"summary": json.dumps(response)}).eq(
+        supabase_client.table("documents").update({"summary": json.loads(response)}).eq(
             "id", document_id
         ).execute()
     except Exception as e:

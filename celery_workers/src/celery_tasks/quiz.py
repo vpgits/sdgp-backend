@@ -175,8 +175,7 @@ def create_quiz_summary_context(
 ):
     try:
         response = create_quiz_summary(questions)
-        response = json.loads(response)
-        supabase_client.from_("quiz").update({"summary": json.dumps(response)}).eq(
+        supabase_client.from_("quiz").update({"summary":json.loads(response)}).eq(
             "id", quiz_id
         ).execute()
     except Exception as e:
