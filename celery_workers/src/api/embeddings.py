@@ -1,13 +1,11 @@
 import logging
-from multiprocessing import context
 import os
 from dotenv import load_dotenv
-import safetensors
 import torch.nn.functional as F
 from torch import Tensor
 from transformers import AutoTokenizer, AutoModel
 from pinecone import Pinecone
-from celery_workers.src.api.parse import get_pages, sliding_window
+from celery_workers.src.api.parse import sliding_window
 
 load_dotenv()
 

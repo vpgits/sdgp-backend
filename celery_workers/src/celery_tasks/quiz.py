@@ -1,8 +1,21 @@
 import logging
-import os
-import requests
+import celery
 import json
-from celery_workers.src.api.openai import create_quiz_summary
+from celery_workers.src.api.database import (
+    insert_key_points,
+    insert_quiz_summary,
+    set_quiz_generating_state,
+)
+from celery_workers.src.api.helpers import (
+    cancel_runpod_request,
+    parse_runpod_response,
+    update_task_state,
+)
+from celery_workers.src.api.requests import (
+    generate_mcq_fireworks,
+    generate_mcq_runpod,
+    create_quiz_summary,
+)
 from celery_workers.src.api.parse import get_pages, sliding_window
 from celery_workers.src.api.embeddings import (
     get_similar_embeddings,
@@ -31,7 +44,7 @@ def quiz_worker(self, quiz_id, access_token, refresh_token):
 
 
 @app.task(bind=True, name="rapid-quiz")
-def rapid_quiz_worker(self, quiz_id, access_token, refresh_token):
+def rapid_quiz_worker(self: celery.Task, quiz_id, access_token, refresh_token):
     try:
         supabase_client = get_supabase_client(access_token, refresh_token)
         rapid_quiz_worker_helper(self, supabase_client, quiz_id)
@@ -41,133 +54,108 @@ def rapid_quiz_worker(self, quiz_id, access_token, refresh_token):
         return {"message": f"failed: {str(e)}"}
 
 
-def rapid_quiz_worker_helper(task, supabase: Client, quiz_id: str):
+def rapid_quiz_worker_helper(task: celery.Task, supabase: Client, quiz_id: str):
     try:
         data = supabase.from_("quiz").select("*").eq("id", quiz_id).execute()
         document_id = data.data[0]["document_id"]
-        task.update_state(state="PROGRESS", meta={"status": "Getting pages"})
+        update_task_state(task, "Getting pages")
         pages = get_pages(supabase, document_id)
-        task.update_state(state="PROGRESS", meta={"status": "Generating questions"})
-        count = 0
+        update_task_state(task, "Generating questions")
         pages = sliding_window(pages)
         questions = []
-        for page in pages:
-            response = call_runpod_endpoint(page)
-            if response.get("status") == "COMPLETED":
-                llm_response = response.get("output")
-                logging.info(llm_response)
-                mcq = parse_runpod_response(llm_response)
-                # type(mcq)
-                supabase.from_("questions").insert(
-                    {"data": mcq, "quiz_id": quiz_id, "document_id": document_id}
-                ).execute()
-                count += 1
-                task.update_state(
-                    state="PROGRESS",
-                    meta={"status": f"Completed {count}/{len(pages)} questions"},
-                )
-                questions.append(mcq)
-            else:
-                task.update_state(
-                    state="PROGRESS",
-                    meta={
-                        "status": f"Failed to generate question {response.get('output')}"
-                    },
-                )
-
+        mcqs = generate_mcq_runopod_bulk(pages, task)
+        bulk_insert_mcq(supabase, quiz_id, mcqs, document_id)
         supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
         create_quiz_summary_context(supabase, quiz_id, questions)
     except Exception as e:
         raise e
 
 
-def quiz_worker_helper(task, supabase: Client, quiz_id: str):
+def bulk_insert_mcq(supabase: Client, quiz_id: str, mcqs: list[str], document_id: str):
+    mcqs = [
+        {"data": mcq, "quiz_id": quiz_id, "document_id": document_id} for mcq in mcqs
+    ]
+    supabase.from_("questions").insert(mcqs).execute()
+
+
+def generate_mcq_runopod_bulk(pages: list[str], task: celery.Task):
+    count = 0
+    questions = []
+    for page in pages:
+        response = generate_mcq_runpod(page)
+        if response.get("status") == "COMPLETED":
+            llm_response = response.get("output")
+            logging.info(llm_response)
+            mcq = parse_runpod_response(llm_response)
+            task.update_state(
+                state="PROGRESS",
+                meta={"status": f"Completed {count}/{len(pages)} questions"},
+            )
+            questions.append(mcq)
+        elif response.get("status") == "IN_QUEUE":
+            task.update_state(
+                state="PROGRESS",
+                meta={
+                    "status": f"Failed to generate question {response.get('output')}"
+                },
+            )
+            response_id = response.get(id)
+            cancel_runpod_request(response_id)
+            # redirecting to fireworks
+            questions = questions.extend(generate_mcq_fireworks_bulk(pages, task))
+            break
+    return questions
+
+
+def generate_mcq_fireworks_bulk(pages: list[str], task: celery.Task):
+    count = 0
+    questions = []
+    for page in pages:
+        response = generate_mcq_fireworks(page)
+        logging.info(response)
+        mcq = parse_runpod_response(response)
+        task.update_state(
+            state="PROGRESS",
+            meta={"status": f"Completed {count}/{len(pages)} questions"},
+        )
+        questions.append(mcq)
+    return questions
+
+
+def quiz_worker_helper(task: celery.Task, supabase: Client, quiz_id: str):
     try:
         data = supabase.from_("quiz").select("*").eq("id", quiz_id).execute()
         document_id = data.data[0]["document_id"]
         num_of_questions = data.data[0]["num_of_questions"]
         remarks = data.data[0]["remarks"]
+
         task.update_state(state="PROGRESS", meta={"status": "Getting pages"})
         pages = get_pages(supabase, document_id)
         task.update_state(state="PROGRESS", meta={"status": "Creating key points"})
         key_points = create_key_points_json(
             text=pages, subtext=remarks, num_of_questions=num_of_questions
         )
-        supabase.from_("key_points").insert(
-            {"data": key_points, "quiz_id": quiz_id}
-        ).execute()
+        insert_key_points(supabase, key_points, quiz_id)
         task.update_state(state="PROGRESS", meta={"status": "Generating questions"})
         key_points = json.loads(key_points).get("key_points")
         count = 0
         questions = []
         for key_point in key_points:
             context = get_similar_embeddings(key_point, document_id, pages)
-            response = call_runpod_endpoint(context)
-            if response.get("status") == "COMPLETED":
-                llm_response = response.get("output")
-                mcq = parse_runpod_response(llm_response)
-                type(mcq)
-                supabase.from_("questions").insert(
-                    {"data": mcq, "quiz_id": quiz_id, "document_id": document_id}
-                ).execute()
-                count += 1
-                task.update_state(
-                    state="PROGRESS",
-                    meta={"status": f"Completed {count}/{len(key_points)} questions"},
-                )
-                questions.append(mcq)
-            else:
-                task.update_state(
-                    state="PROGRESS",
-                    meta={
-                        "status": f"Failed to generate question {response.get('output')}"
-                    },
-                )
-        supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
+            response = generate_mcq_runpod(context)
+            mcq = parse_runpod_response(response)
+            type(mcq)
+            count += 1
+            task.update_state(
+                state="PROGRESS",
+                meta={"status": f"Completed {count}/{len(key_points)} questions"},
+            )
+            questions.append(mcq)
+        bulk_insert_mcq(supabase, quiz_id, questions, document_id)
+        set_quiz_generating_state(supabase, quiz_id, False)
         create_quiz_summary_context(supabase, quiz_id, questions)
     except Exception as e:
         raise e
-
-
-def call_runpod_endpoint(input_text: str):
-    url = f"https://api.runpod.ai/v2/{os.getenv('RUNPOD_WORKER_ID')}/runsync"
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + os.getenv("RUNPOD_API_KEY"),
-        "charset": "utf-8",
-    }
-
-    payload = {
-        "input": {
-            "text": str(
-                """[INST]### Instruction : Generate a multiple-choice question (MCQ) based on the core concept identified in a given text. This MCQ should include one correct answer and three incorrect but plausible answers, crafted to assess comprehension of the concept. Format your output as a JSON object following a specified schema, emphasizing the logical extraction and representation of the text's main idea through a question and answers format. This task requires understanding and distilling the essence of the input text, applying it to create an educational or evaluative MCQ relevant to the discussed concept.
-Output Format Schema:
-The output should be a JSON object with a specific structure, including fields for the question, the correct answer, and an array of incorrect answers, all requiring strings.
-Task Objective:
-Analyze the text to identify the core concept.
-Formulate a question that encapsulates this concept.
-Determine one correct answer and generate three plausible incorrect answers.
-Adhere to the provided JSON schema for your output. Make sure not to generate escape characters.
-.The output should be formatted as a json in the below format." + "{\"type\": \"object\", \"properties\": {\"Output\": {\"type\": \"object\", \"properties\": {\"question\": {\"type\": \"string\"}, \"correct_answer\": {\"type\": \"string\"}, \"incorrect_answers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"question\", \"correct_answer\", \"incorrect_answers\"]}}, \"required\": [\"Output\"]}"""
-                + f"### Input :{input_text}.[/INST]"
-                + "### Output :"
-            )
-        }
-    }
-
-    response = requests.request("POST", url, headers=headers, data=json.dumps(payload))
-    return response.json()
-
-
-def parse_runpod_response(llm_response: str) -> str:
-    special_token = "### Output :"
-    output_start = llm_response.find(special_token) + len(special_token)
-    if output_start > len(special_token):
-        json_str = llm_response[output_start:].strip()
-        output_json = json.loads(json_str)
-        mcq = output_json.get("Output")
-        return mcq
 
 
 def create_quiz_summary_context(
@@ -175,20 +163,6 @@ def create_quiz_summary_context(
 ):
     try:
         response = create_quiz_summary(questions)
-        supabase_client.from_("quiz").update({"summary":json.loads(response)}).eq(
-            "id", quiz_id
-        ).execute()
+        insert_quiz_summary(supabase_client, quiz_id, response)
     except Exception as e:
         raise e
-
-
-# """[INST]### Instruction : Generate a multiple-choice question (MCQ) based on the core concept identified in a given text. This MCQ should include one correct answer and three incorrect but plausible answers, crafted to assess comprehension of the concept. Format your output as a JSON object following a specified schema, emphasizing the logical extraction and representation of the text's main idea through a question and answers format. This task requires understanding and distilling the essence of the input text, applying it to create an educational or evaluative MCQ relevant to the discussed concept.
-# Output Format Schema:
-# The output should be a JSON object with a specific structure, including fields for the question, the correct answer, and an array of incorrect answers, all requiring strings.
-# {\"type\": \"object\", \"properties\": {\"Output\": {\"type\": \"object\", \"properties\": {\"question\": {\"type\": \"string\"}, \"correct_answer\": {\"type\": \"string\"}, \"incorrect_answers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"question\", \"correct_answer\", \"incorrect_answers\"]}}, \"required\": [\"Output\"]}
-# Task Objective:
-# Analyze the text to identify the core concept.
-# Formulate a question that encapsulates this concept.
-# Determine one correct answer and generate three plausible incorrect answers.
-# Adhere to the provided JSON schema for your output.
-# """

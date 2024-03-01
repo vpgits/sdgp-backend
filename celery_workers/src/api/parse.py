@@ -9,7 +9,7 @@ from docx import Document
 from pptx import Presentation
 import json
 
-from celery_workers.src.api.openai import create_document_summary
+from celery_workers.src.api.requests import create_document_summary
 
 
 def parse_pages(path: str, supabase_client: Client, document_id: str) -> None:

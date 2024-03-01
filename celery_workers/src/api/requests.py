@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 import json
 import os
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
 
@@ -112,3 +113,38 @@ def create_document_summary(pages: list):
         ],
     )
     return chat_completion.choices[0].message.content
+
+
+def generate_mcq_runpod(input_text: str):
+    url = f"https://api.runpod.ai/v2/{os.getenv('RUNPOD_WORKER_ID')}/runsync"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + os.getenv("RUNPOD_API_KEY"),
+        "charset": "utf-8",
+    }
+
+    payload = {
+        "input": {
+            "text": str(
+                """[INST]### Instruction : Generate a multiple-choice question (MCQ) based on the core concept identified in a given text. This MCQ should include one correct answer and three incorrect but plausible answers, crafted to assess comprehension of the concept. Format your output as a JSON object following a specified schema, emphasizing the logical extraction and representation of the text's main idea through a question and answers format. This task requires understanding and distilling the essence of the input text, applying it to create an educational or evaluative MCQ relevant to the discussed concept.
+Output Format Schema:
+The output should be a JSON object with a specific structure, including fields for the question, the correct answer, and an array of incorrect answers, all requiring strings.
+Task Objective:
+Analyze the text to identify the core concept.
+Formulate a question that encapsulates this concept.
+Determine one correct answer and generate three plausible incorrect answers.
+Adhere to the provided JSON schema for your output. Make sure not to generate escape characters.
+.The output should be formatted as a json in the below format." + "{\"type\": \"object\", \"properties\": {\"Output\": {\"type\": \"object\", \"properties\": {\"question\": {\"type\": \"string\"}, \"correct_answer\": {\"type\": \"string\"}, \"incorrect_answers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"question\", \"correct_answer\", \"incorrect_answers\"]}}, \"required\": [\"Output\"]}"""
+                + f"### Input :{input_text}.[/INST]"
+                + "### Output :"
+            )
+        }
+    }
+
+    response = requests.request("POST", url, headers=headers, data=json.dumps(payload))
+    return response.json()
+
+
+def generate_mcq_fireworks(input_text: str):
+    pass
