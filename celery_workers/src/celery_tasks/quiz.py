@@ -1,25 +1,23 @@
+from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 import logging
 import celery
 import json
 from celery_workers.src.api.database import (
     insert_key_points,
     insert_quiz_summary,
-    set_quiz_generating_state,
 )
+from celery_workers.src.api.embeddings import get_similar_embeddings
 from celery_workers.src.api.helpers import (
-    cancel_runpod_request,
     parse_runpod_response,
     update_task_state,
 )
 from celery_workers.src.api.requests import (
+    create_key_points,
     generate_mcq_fireworks,
     generate_mcq_runpod,
     create_quiz_summary,
 )
 from celery_workers.src.api.parse import get_pages, sliding_window
-from celery_workers.src.api.embeddings import (
-    get_similar_embeddings,
-)
 from celery_workers.src.api.summary import create_key_points_json
 from celery_workers.src.config.supabase_client import get_supabase_client
 from supabase import Client
@@ -57,17 +55,28 @@ def rapid_quiz_worker(self: celery.Task, quiz_id, access_token, refresh_token):
 def rapid_quiz_worker_helper(task: celery.Task, supabase: Client, quiz_id: str):
     try:
         data = supabase.from_("quiz").select("*").eq("id", quiz_id).execute()
+        if not data.data:
+            raise Exception("No quiz data found for the given quiz_id")
         document_id = data.data[0]["document_id"]
         update_task_state(task, "Getting pages")
         pages = get_pages(supabase, document_id)
         update_task_state(task, "Generating questions")
         pages = sliding_window(pages)
-        questions = []
-        mcqs = generate_mcq_runopod_bulk(pages, task)
+        mcqs: list[str] = generate_mcq_runopod_bulk(pages)
+        if not mcqs:
+            logging.error("Endpoint seems to be busy")
+            update_task_state(
+                task, "Endpoint seems to be busy", "FAILED"
+            )  # Update the task state to indicate failure
+            return
+        update_task_state(task, "Inserting questions")
         bulk_insert_mcq(supabase, quiz_id, mcqs, document_id)
         supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
-        create_quiz_summary_context(supabase, quiz_id, questions)
+        update_task_state(task, "Creating quiz summary")
+        create_quiz_summary_context(supabase, quiz_id, mcqs)
     except Exception as e:
+        update_task_state(task, "Failed")  # Update the task state to indicate failure
+        logging.error(f"Error in rapid_quiz_worker_helper: {e}")
         raise e
 
 
@@ -78,84 +87,68 @@ def bulk_insert_mcq(supabase: Client, quiz_id: str, mcqs: list[str], document_id
     supabase.from_("questions").insert(mcqs).execute()
 
 
-def generate_mcq_runopod_bulk(pages: list[str], task: celery.Task):
-    count = 0
-    questions = []
-    for page in pages:
-        response = generate_mcq_runpod(page)
-        if response.get("status") == "COMPLETED":
-            llm_response = response.get("output")
-            logging.info(llm_response)
-            mcq = parse_runpod_response(llm_response)
-            task.update_state(
-                state="PROGRESS",
-                meta={"status": f"Completed {count}/{len(pages)} questions"},
-            )
-            questions.append(mcq)
-        elif response.get("status") == "IN_QUEUE":
-            task.update_state(
-                state="PROGRESS",
-                meta={
-                    "status": f"Failed to generate question {response.get('output')}"
-                },
-            )
-            response_id = response.get(id)
-            cancel_runpod_request(response_id)
-            # redirecting to fireworks
-            questions = questions.extend(generate_mcq_fireworks_bulk(pages, task))
-            break
-    return questions
+def generate_mcq_runopod_bulk(pages: list[str]):
+
+    try:
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(generate_mcq_runpod, page) for page in pages]
+            wait(futures, return_when=ALL_COMPLETED)
+            results = [parse_runpod_response(future.result()) for future in futures]
+            return results
+    except Exception as e:
+        raise e
 
 
 def generate_mcq_fireworks_bulk(pages: list[str], task: celery.Task):
-    count = 0
-    questions = []
-    for page in pages:
-        response = generate_mcq_fireworks(page)
-        logging.info(response)
-        mcq = parse_runpod_response(response)
-        task.update_state(
-            state="PROGRESS",
-            meta={"status": f"Completed {count}/{len(pages)} questions"},
-        )
-        questions.append(mcq)
-    return questions
+    try:
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(generate_mcq_fireworks, page) for page in pages]
+            wait(futures, return_when=ALL_COMPLETED)
+            results = [parse_runpod_response(future.result()) for future in futures]
+            return results
+    except Exception as e:
+        raise e
 
 
 def quiz_worker_helper(task: celery.Task, supabase: Client, quiz_id: str):
     try:
         data = supabase.from_("quiz").select("*").eq("id", quiz_id).execute()
+        if not data.data:
+            update_task_state(
+                task, "No quiz data found for the given quiz_id", "FAILED"
+            )
         document_id = data.data[0]["document_id"]
         num_of_questions = data.data[0]["num_of_questions"]
         remarks = data.data[0]["remarks"]
-
-        task.update_state(state="PROGRESS", meta={"status": "Getting pages"})
+        update_task_state(task, "Getting pages")
         pages = get_pages(supabase, document_id)
-        task.update_state(state="PROGRESS", meta={"status": "Creating key points"})
-        key_points = create_key_points_json(
+        update_task_state(task, "Creating key points")
+        logging.info("Creating key points")
+        key_points = create_key_points(
             text=pages, subtext=remarks, num_of_questions=num_of_questions
         )
         insert_key_points(supabase, key_points, quiz_id)
-        task.update_state(state="PROGRESS", meta={"status": "Generating questions"})
+        update_task_state(task, "Generating questions")
         key_points = json.loads(key_points).get("key_points")
-        count = 0
-        questions = []
-        for key_point in key_points:
-            context = get_similar_embeddings(key_point, document_id, pages)
-            response = generate_mcq_runpod(context)
-            mcq = parse_runpod_response(response)
-            type(mcq)
-            count += 1
-            task.update_state(
-                state="PROGRESS",
-                meta={"status": f"Completed {count}/{len(key_points)} questions"},
-            )
-            questions.append(mcq)
-        bulk_insert_mcq(supabase, quiz_id, questions, document_id)
-        set_quiz_generating_state(supabase, quiz_id, False)
-        create_quiz_summary_context(supabase, quiz_id, questions)
+        contexts = [
+            get_similar_embeddings(key_point, document_id, pages)
+            for key_point in key_points
+        ]
+        mcqs = generate_mcq_runopod_bulk(contexts)
+        if not mcqs:
+            logging.error("Endpoint seems to be busy")
+            update_task_state(
+                task, "Endpoint seems to be busy", "FAILED"
+            )  # Update the task state to indicate failure
+            return
+        update_task_state(task, "Inserting questions")
+        bulk_insert_mcq(supabase, quiz_id, mcqs, document_id)
+        supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
+        update_task_state(task, "Creating quiz summary")
+        create_quiz_summary_context(supabase, quiz_id, mcqs)
     except Exception as e:
-        raise e
+        update_task_state(task, "Failed")  # Update the task state to indicate failure
+        logging.error(f"Error in quiz_worker_helper: {e}")
 
 
 def create_quiz_summary_context(

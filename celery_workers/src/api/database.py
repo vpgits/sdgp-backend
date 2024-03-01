@@ -113,5 +113,5 @@ def set_quiz_generating_state(supabase: Client, quiz_id: str, state: bool):
 
 def insert_key_points(supabase: Client, key_points: list[str], quiz_id: str):
     supabase.from_("key_points").insert(
-        {"data": key_points, "quiz_id": quiz_id}
+        {"data": json.loads(key_points), "quiz_id": quiz_id}
     ).execute()
