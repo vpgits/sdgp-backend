@@ -15,7 +15,6 @@ app = Celery(
     ),  # Use the service name as defined in docker-compose.yml
     include=[
         "celery_workers.src.celery_tasks.preprocess",
-        "celery_workers.src.celery_tasks.generate_mcq",
         "celery_workers.src.celery_tasks.tick_tock",
         "celery_workers.src.celery_tasks.quiz",
     ],
