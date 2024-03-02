@@ -55,7 +55,6 @@ def create_mcq_json(key_point="what is encapsulation", context=None):
     )
     return response.choices[0].message.content
 
-
 def create_quiz_summary(quiz: list):
     client = OpenAI(
         base_url="https://api.fireworks.ai/inference/v1",

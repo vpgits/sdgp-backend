@@ -1,4 +1,5 @@
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
+from email.policy import default
 import logging
 import celery
 import json
@@ -31,10 +32,10 @@ logger.setLevel(logging.INFO)
 
 
 @app.task(bind=True, name="quiz")
-def quiz_worker(self, quiz_id, access_token, refresh_token):
+def quiz_worker(self, quiz_id, default_model, access_token, refresh_token):
     try:
         supabase_client = get_supabase_client(access_token, refresh_token)
-        quiz_worker_helper(self, supabase_client, quiz_id)
+        quiz_worker_helper(self, supabase_client, quiz_id, default_model)
         supabase_client.auth.sign_out()
         return {"message": "success"}
     except Exception as e:
@@ -42,17 +43,21 @@ def quiz_worker(self, quiz_id, access_token, refresh_token):
 
 
 @app.task(bind=True, name="rapid-quiz")
-def rapid_quiz_worker(self: celery.Task, quiz_id, access_token, refresh_token):
+def rapid_quiz_worker(
+    self: celery.Task, quiz_id, default_model, access_token, refresh_token
+):
     try:
         supabase_client = get_supabase_client(access_token, refresh_token)
-        rapid_quiz_worker_helper(self, supabase_client, quiz_id)
+        rapid_quiz_worker_helper(self, supabase_client, quiz_id, default_model)
         supabase_client.auth.sign_out()
         return {"message": "success"}
     except Exception as e:
         return {"message": f"failed: {str(e)}"}
 
 
-def rapid_quiz_worker_helper(task: celery.Task, supabase: Client, quiz_id: str):
+def rapid_quiz_worker_helper(
+    task: celery.Task, supabase: Client, quiz_id: str, default_model: bool
+):
     try:
         data = supabase.from_("quiz").select("*").eq("id", quiz_id).execute()
         if not data.data:
@@ -62,7 +67,10 @@ def rapid_quiz_worker_helper(task: celery.Task, supabase: Client, quiz_id: str):
         pages = get_pages(supabase, document_id)
         update_task_state(task, "Generating questions")
         pages = sliding_window(pages)
-        mcqs: list[str] = generate_mcq_runopod_bulk(pages)
+        if default_model:
+            mcqs = generate_mcq_runopod_bulk(pages)
+        else:
+            mcqs = generate_mcq_fireworks_bulk(pages)
         if not mcqs:
             logging.error("Endpoint seems to be busy")
             update_task_state(
@@ -99,7 +107,7 @@ def generate_mcq_runopod_bulk(pages: list[str]):
         raise e
 
 
-def generate_mcq_fireworks_bulk(pages: list[str], task: celery.Task):
+def generate_mcq_fireworks_bulk(pages: list[str]):
     try:
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = [executor.submit(generate_mcq_fireworks, page) for page in pages]
@@ -110,7 +118,9 @@ def generate_mcq_fireworks_bulk(pages: list[str], task: celery.Task):
         raise e
 
 
-def quiz_worker_helper(task: celery.Task, supabase: Client, quiz_id: str):
+def quiz_worker_helper(
+    task: celery.Task, supabase: Client, quiz_id: str, default_model: bool
+):
     try:
         data = supabase.from_("quiz").select("*").eq("id", quiz_id).execute()
         if not data.data:
@@ -134,7 +144,10 @@ def quiz_worker_helper(task: celery.Task, supabase: Client, quiz_id: str):
             get_similar_embeddings(key_point, document_id, pages)
             for key_point in key_points
         ]
-        mcqs = generate_mcq_runopod_bulk(contexts)
+        if default_model:
+            mcqs = generate_mcq_runopod_bulk(contexts)
+        else:
+            mcqs = generate_mcq_fireworks_bulk(contexts)
         if not mcqs:
             logging.error("Endpoint seems to be busy")
             update_task_state(

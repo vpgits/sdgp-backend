@@ -58,7 +58,9 @@ async def tick_tock():
 async def quiz(
     request: QuizBody, tokens: tuple[str, str] = Depends(extract_header_auth_tokens)
 ):
-    task = celery_app.send_task("quiz", args=[request.quiz_id, *tokens])
+    task = celery_app.send_task(
+        "quiz", args=[request.quiz_id, request.default_model, *tokens]
+    )
     return {
         "task_id": task.id,
         "message": "Task has been sent to the background worker",
@@ -69,7 +71,9 @@ async def quiz(
 async def rapid_quiz(
     request: QuizBody, tokens: tuple[str, str] = Depends(extract_header_auth_tokens)
 ):
-    task = celery_app.send_task("rapid-quiz", args=[request.quiz_id, *tokens])
+    task = celery_app.send_task(
+        "rapid-quiz", args=[request.quiz_id, request.default_model, *tokens]
+    )
     return {
         "task_id": task.id,
         "message": "Task has been sent to the background worker",
