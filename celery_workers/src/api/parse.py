@@ -1,14 +1,15 @@
 import logging
-from pydoc import doc
 import re
 import os
-import pytesseract
 from io import BytesIO
 from supabase import Client
 from pypdf import PdfReader
 from supabase import Client
 from docx import Document
 from pptx import Presentation
+import json
+
+from celery_workers.src.api.requests import create_document_summary
 
 
 def parse_pages(path: str, supabase_client: Client, document_id: str) -> None:
@@ -166,3 +167,16 @@ def sliding_window(pages, window_size=512, slide=378) -> list[str]:
         return window
     except Exception as e:
         logging.error("Error while creating sliding window: " + str(e))
+
+
+def create_document_summary_context(
+    pages: list, supabase_client: Client, document_id: str
+):
+    try:
+        response = create_document_summary(pages)
+        supabase_client.table("documents").update({"summary": json.loads(response)}).eq(
+            "id", document_id
+        ).execute()
+    except Exception as e:
+        logging.error("Error while creating document context: " + str(e))
+        raise e

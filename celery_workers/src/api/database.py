@@ -1,12 +1,13 @@
 import logging
 import os
+import json
 from supabase import Client
-from api.embeddings import generate_embedding_query
+from celery_workers.src.api.embeddings import generate_embedding_query
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from pinecone.core.client.model.query_response import QueryResponse
-from config.supabase_client import get_supabase_client
-from api.parse import get_pages, sliding_window
+from celery_workers.src.config.supabase_client import get_supabase_client
+from celery_workers.src.api.parse import get_pages, sliding_window
 
 load_dotenv()
 
@@ -15,13 +16,13 @@ def download_file(path: str, access_token: str, refresh_token: str):
     supabase: Client = get_supabase_client(access_token, refresh_token)
     file_path = f"./resources/{path}"
     try:
-        res = supabase.storage.from_("public/pdf").download(path)
-        logging.info("download_file reading")
+        res = supabase.storage.from_("pdf").download(path)
         # if the ./resources folder does not exist, create it
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "wb+") as f:
             f.write(res)
     except Exception as e:
+        logging.error("Error Downloading file: " + str(e))
         raise e
 
 
@@ -98,3 +99,19 @@ def extract_indexes(response: QueryResponse, supabase_client, document_id: str) 
         context += pages[i]
     logging.info("context: " + context)
     return context
+
+
+def insert_quiz_summary(supabase_client: Client, quiz_id: str, summary: str):
+    supabase_client.from_("quiz").update({"summary": json.loads(summary)}).eq(
+        "id", quiz_id
+    ).execute()
+
+
+def set_quiz_generating_state(supabase: Client, quiz_id: str, state: bool):
+    supabase.from_("quiz").update({"generating": state}).eq("id", quiz_id).execute()
+
+
+def insert_key_points(supabase: Client, key_points: list[str], quiz_id: str):
+    supabase.from_("key_points").insert(
+        {"data": json.loads(key_points), "quiz_id": quiz_id}
+    ).execute()
