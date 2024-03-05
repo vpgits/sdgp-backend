@@ -10,8 +10,8 @@ load_dotenv()
 
 FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
 
-if not FIREWORKS_API_KEY:
-    raise ValueError("FIREWORKS_API_KEY not set")
+# if not FIREWORKS_API_KEY:
+#     raise ValueError("FIREWORKS_API_KEY not set")
 
 
 class DocumentSummary(BaseModel):
