@@ -1,3 +1,4 @@
+from email.policy import default
 from pydantic import BaseModel
 from typing import List
 
@@ -14,3 +15,4 @@ class GenerateMCQBody(BaseModel):
 
 class QuizBody(BaseModel):
     quiz_id: str
+    default_model:bool
