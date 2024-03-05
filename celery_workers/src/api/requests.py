@@ -1,4 +1,3 @@
-import array
 from openai import OpenAI
 from pydantic import BaseModel, Field
 import json
