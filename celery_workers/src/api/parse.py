@@ -5,7 +5,7 @@ import os
 import pytesseract
 from io import BytesIO
 from supabase import Client
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 from supabase import Client
 from docx import Document
 from pptx import Presentation
