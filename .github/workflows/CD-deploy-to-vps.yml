@@ -1,0 +1,38 @@
+name: Deploy the containers
+permissions:
+  id-token: write
+  contents: read
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          ref: microservice
+      - name: executing remote ssh commands using password
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_IP }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PWD }}
+          port: 22
+          script: |
+            echo "Running whoami command"
+            whoami
+            echo "Removing previous sdgp directory"
+            rm -rf ~/sdgp
+            echo "Cloning sdgp-backend repository"
+            git clone git@github.com:vpgits/sdgp-backend.git ~/sdgp
+            echo "Pulling latest Docker images"
+            docker pull backend-quizzifyme.venura.dev/sdgp-backend-web:latest
+            docker pull backend-quizzifyme.venura.dev/sdgp-backend-worker:latest
+            echo "Changing directory to sdgp"
+            cd ~/sdgp
+            echo checking out to microservice branch
+            git checkout microservice
+            echo "Starting Docker containers"
+            docker-compose up -d
