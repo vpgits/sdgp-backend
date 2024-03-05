@@ -10,6 +10,7 @@ from celery_workers.src.api.parse import (
     does_pages_exist,
     get_pages,
 )
+from celery_workers.src.api.helpers import update_task_state
 from celery_workers.src.api.embeddings import create_vector_index
 from supabase import Client
 import logging
@@ -27,7 +28,7 @@ def preprocess_worker(self, path, document_id, access_token, refresh_token):
         user_id: str = get_current_user(supabase_client, access_token)
         preprocess_worker_helper(self, supabase_client, path, document_id, user_id)
         supabase_client.auth.sign_out()
-        return {"message": "success"}
+        return {"message": "Document has been preprocessed successfully"}
     except Exception as e:
         logger.error("An exception has occurred on preprocess_worker: {str(e)}")
         return {"message": f"failed: {str(e)}"}
@@ -42,19 +43,14 @@ def preprocess_worker_helper(
     try:
         if not does_pages_exist(supabase_client, document_id):
             logger.info("Pages do not exist. Extracting pages from PDF")
-            task.update_state(
-                state="PROGRESS", meta={"status": "Extracting pages from PDF"}
-            )
+            update_task_state(task, "Extracting pages from PDF")
             parse_pages(path, supabase_client, document_id)
         pages = get_pages(supabase_client, document_id)
         if pages:
-            task.update_state(
-                state="PROGRESS", meta={"status": "Creating vector index"}
-            )
+            update_task_state(task, "Creating vector index")
             create_vector_index(pages, document_id)
-            task.update_state(state="PROGRESS", meta={"status": "Creating summary"})
+            update_task_state(task, "Creating document summary")
             create_document_summary_context(pages, supabase_client, document_id)
-            return {"message": "success"}
     except Exception as e:
         logger.error(f"An exception has occurred on preprocess_worker_helper: {str(e)}")
         return {"message": f"failed: {str(e)}"}
