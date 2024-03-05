@@ -2,18 +2,14 @@ version: "3.8"
 
 services:
   web:
-    build:
-      context: .
-      dockerfile: ./fastapi_app/Dockerfile
+    image: backend-quizzifyme.venura.dev/sdgp-backend-web:latest
     ports:
       - "8000:8000"
     depends_on:
       - rabbitmq
 
   worker:
-    build:
-      context: .
-      dockerfile: ./celery_workers/Dockerfile
+    image: backend-quizzifyme.venura.dev/sdgp-backend-worker:latest
     depends_on:
       - rabbitmq
 
@@ -27,17 +23,6 @@ services:
     ports:
       - "15672:15672"
       - "5672:5672"
-
-  flower:
-    image: mher/flower
-    environment:
-      - CELERY_BROKER_URL=pyamqp://sdgp_admin:59h%40WeMyBtfV%24YD@rabbitmq:15672/
-
-    command: celery flower
-    ports:
-      - "5555:5555"
-    depends_on:
-      - rabbitmq
 
   redis:
     image: "redis:7.2-alpine"

@@ -32,7 +32,5 @@ jobs:
             docker pull backend-quizzifyme.venura.dev/sdgp-backend-worker:latest
             echo "Changing directory to sdgp"
             cd ~/sdgp
-            echo checking out to microservice branch
-            git checkout microservice
             echo "Starting Docker containers"
             docker-compose up -d
