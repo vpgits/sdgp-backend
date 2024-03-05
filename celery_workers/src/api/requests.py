@@ -1,5 +1,5 @@
 from openai import OpenAI
-from pydantic import BaseModel, Field
+from celery_workers.src.api.models import Mcq, KeyPoints, DocumentSummary, QuizSummary
 import json
 import os
 from dotenv import load_dotenv
@@ -13,28 +13,7 @@ FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
 #     raise ValueError("FIREWORKS_API_KEY not set")
 
 
-class DocumentSummary(BaseModel):
-    title: str = Field(..., description="Title of the user text")
-    summary: str = Field(..., description="Summary of the user text")
-
-
-class QuizSummary(BaseModel):
-    title: str = Field(..., description="Title of the user text")
-    summary: str = Field(..., description="Summary of the user text")
-
-
-class Mcq(BaseModel):
-    question: str = Field(..., description="Question of the user text")
-    correct_answer: str = Field(..., description="Correct answer of the user text")
-    incorrect_answers: list = Field(
-        ..., description="Incorrect answers of the user text"
-    )
-
-
-class KeyPoints(BaseModel):
-    key_points: list[str] = Field(..., description="Key points of the user text")
-
-
+# no test
 def create_mcq_json(key_point="what is encapsulation", context=None):
     client = OpenAI()
     response = client.chat.completions.create(
@@ -54,7 +33,9 @@ def create_mcq_json(key_point="what is encapsulation", context=None):
     )
     return response.choices[0].message.content
 
+
 def create_quiz_summary(quiz: list):
+    print(FIREWORKS_API_KEY)
     client = OpenAI(
         base_url="https://api.fireworks.ai/inference/v1",
         api_key=FIREWORKS_API_KEY,
@@ -194,7 +175,7 @@ Adhere to the provided JSON schema for your output. Make sure not to generate es
 def generate_mcq_fireworks(input_text: str):
     client = OpenAI(
         base_url="https://api.fireworks.ai/inference/v1",
-        api_key=FIREWORKS_API_KEY,
+        api_key="F73t3mC2l8bGJAK1OUCglY0nrIM7qTPb3lD2GwGPcdKnAnaw",
     )
     chat_completion = client.chat.completions.create(
         model="accounts/fireworks/models/mixtral-8x7b-instruct",

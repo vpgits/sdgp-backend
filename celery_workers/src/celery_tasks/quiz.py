@@ -3,7 +3,8 @@ import logging
 import celery
 import json
 from celery_workers.src.api.embeddings import get_similar_embeddings
-from celery_workers.src.api.parse import get_pages, sliding_window
+from celery_workers.src.api.parse import get_pages_from_supabase
+from celery_workers.src.api.utils import sliding_window
 from celery_workers.src.config.supabase_client import get_supabase_client
 from supabase import Client
 from celery_app.celery_app import app
@@ -63,7 +64,7 @@ def rapid_quiz_worker_helper(
             raise Exception("No quiz data found for the given quiz_id")
         document_id = data.data[0]["document_id"]
         update_task_state(task, "Getting pages")
-        pages = get_pages(supabase, document_id)
+        pages = get_pages_from_supabase(supabase, document_id)
         update_task_state(task, "Generating questions")
         pages = sliding_window(pages)
         if default_model:
@@ -130,7 +131,7 @@ def quiz_worker_helper(
         num_of_questions = data.data[0]["num_of_questions"]
         remarks = data.data[0]["remarks"]
         update_task_state(task, "Getting pages")
-        pages = get_pages(supabase, document_id)
+        pages = get_pages_from_supabase(supabase, document_id)
         update_task_state(task, "Creating key points")
         logging.info("Creating key points")
         key_points = create_key_points(

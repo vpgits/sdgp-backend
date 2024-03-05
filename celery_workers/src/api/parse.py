@@ -9,9 +9,11 @@ from docx import Document
 from pptx import Presentation
 import json
 
-from celery_workers.src.api.requests import create_document_summary
+
+from celery_workers.src.api.database import add_pages_to_supabase
 
 
+# no test
 def parse_pages(path: str, supabase_client: Client, document_id: str) -> None:
     # this function will parse an entire pdf into an array of pages
     try:
@@ -30,6 +32,7 @@ def parse_pages(path: str, supabase_client: Client, document_id: str) -> None:
         raise e
 
 
+# test
 def file_type(path: str) -> str:
     # this function will return the type of file
     try:
@@ -49,6 +52,7 @@ def file_type(path: str) -> str:
         raise e
 
 
+# no test
 def does_pages_exist(supabase: Client, document_id: str) -> bool:
     try:
         data = (
@@ -61,13 +65,6 @@ def does_pages_exist(supabase: Client, document_id: str) -> bool:
     except Exception as e:
         logging.error(str(e))
         raise e
-
-
-def get_pages(supabase: Client, document_id: str) -> list[str]:
-    data = supabase.from_("documents").select("data").eq("id", document_id).execute()
-    pages = data.data[0].get("data").get("data")
-    logging.info("Pages retrieved successfully!")
-    return pages
 
 
 def read_pdf(path: str) -> list[str]:
@@ -122,15 +119,7 @@ def read_pptx(path: str) -> list[str]:
         raise
 
 
-def add_pages_to_supabase(
-    supabase_client: Client, pages: list[str], document_id: str
-) -> None:
-    supabase_client.table("documents").update({"data": {"data": pages}}).eq(
-        "id", document_id
-    ).execute()
-    logging.info("Pages added successfully!")
-
-
+# test
 def get_file_type(supabase_client: Client, document_id: str) -> str:
     data = (
         supabase_client.table("documents")
@@ -141,6 +130,7 @@ def get_file_type(supabase_client: Client, document_id: str) -> str:
     return data.data[0].get("file_type")
 
 
+# test
 def download_file(supabase_client: Client, path: str, document_id: str) -> None:
     # this function will download a file from supabase storage
     file_type = get_file_type(supabase_client, document_id)
@@ -156,19 +146,10 @@ def download_file(supabase_client: Client, path: str, document_id: str) -> None:
         raise e
 
 
-def sliding_window(pages, window_size=512, slide=378) -> list[str]:
-    # this function will take a batch of sentences and create chunks for embeddings
-    try:
-        page_single_string = " ".join(pages)
-        window = []
-        for i in range(0, len(page_single_string), slide):
-            window_chunk = page_single_string[i : i + window_size]
-            window.append(window_chunk)
-        return window
-    except Exception as e:
-        logging.error("Error while creating sliding window: " + str(e))
+from celery_workers.src.api.requests import create_document_summary
 
 
+# no test needed
 def create_document_summary_context(
     pages: list, supabase_client: Client, document_id: str
 ):
