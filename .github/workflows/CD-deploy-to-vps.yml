@@ -11,8 +11,7 @@ jobs:
     steps:
       - name: Checkout the code
         uses: actions/checkout@v4
-        with:
-          ref: microservice
+        
       - name: executing remote ssh commands using password
         uses: appleboy/ssh-action@v1.0.3
         with:
