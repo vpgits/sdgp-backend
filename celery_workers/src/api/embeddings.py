@@ -5,7 +5,8 @@ import torch.nn.functional as F
 from torch import Tensor
 from transformers import AutoTokenizer, AutoModel
 from pinecone import Pinecone
-from celery_workers.src.api.parse import sliding_window
+from celery_workers.src.api.utils import sliding_window
+
 
 load_dotenv()
 

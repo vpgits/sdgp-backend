@@ -8,7 +8,9 @@ from celery_workers.src.api.parse import (
     create_document_summary_context,
     parse_pages,
     does_pages_exist,
-    get_pages,
+)
+from celery_workers.src.api.database import (
+    get_pages_from_supabase,
 )
 from celery_workers.src.api.helpers import update_task_state
 from celery_workers.src.api.embeddings import create_vector_index
@@ -45,7 +47,7 @@ def preprocess_worker_helper(
             logger.info("Pages do not exist. Extracting pages from PDF")
             update_task_state(task, "Extracting pages from PDF")
             parse_pages(path, supabase_client, document_id)
-        pages = get_pages(supabase_client, document_id)
+        pages = get_pages_from_supabase(supabase_client, document_id)
         if pages:
             update_task_state(task, "Creating vector index")
             create_vector_index(pages, document_id)
