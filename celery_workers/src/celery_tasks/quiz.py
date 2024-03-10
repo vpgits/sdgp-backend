@@ -1,13 +1,19 @@
 from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
-from email.policy import default
 import logging
 import celery
 import json
+from celery_workers.src.api.embeddings import get_similar_embeddings
+from celery_workers.src.api.parse import get_pages_from_supabase
+from celery_workers.src.api.utils import sliding_window
+from celery_workers.src.config.supabase_client import get_supabase_client
+from supabase import Client
+from celery_app.celery_app import app
+from dotenv import load_dotenv
+
 from celery_workers.src.api.database import (
     insert_key_points,
     insert_quiz_summary,
 )
-from celery_workers.src.api.embeddings import get_similar_embeddings
 from celery_workers.src.api.helpers import (
     parse_runpod_response,
     update_task_state,
@@ -18,12 +24,6 @@ from celery_workers.src.api.requests import (
     generate_mcq_runpod,
     create_quiz_summary,
 )
-from celery_workers.src.api.parse import get_pages, sliding_window
-from celery_workers.src.api.summary import create_key_points_json
-from celery_workers.src.config.supabase_client import get_supabase_client
-from supabase import Client
-from celery_app.celery_app import app
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -64,7 +64,7 @@ def rapid_quiz_worker_helper(
             raise Exception("No quiz data found for the given quiz_id")
         document_id = data.data[0]["document_id"]
         update_task_state(task, "Getting pages")
-        pages = get_pages(supabase, document_id)
+        pages = get_pages_from_supabase(supabase, document_id)
         update_task_state(task, "Generating questions")
         pages = sliding_window(pages)
         if default_model:
@@ -131,7 +131,7 @@ def quiz_worker_helper(
         num_of_questions = data.data[0]["num_of_questions"]
         remarks = data.data[0]["remarks"]
         update_task_state(task, "Getting pages")
-        pages = get_pages(supabase, document_id)
+        pages = get_pages_from_supabase(supabase, document_id)
         update_task_state(task, "Creating key points")
         logging.info("Creating key points")
         key_points = create_key_points(

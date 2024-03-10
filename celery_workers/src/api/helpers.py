@@ -1,4 +1,3 @@
-from concurrent.futures import Future
 import json
 import celery
 import requests

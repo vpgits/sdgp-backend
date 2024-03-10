@@ -5,7 +5,8 @@ import torch.nn.functional as F
 from torch import Tensor
 from transformers import AutoTokenizer, AutoModel
 from pinecone import Pinecone
-from celery_workers.src.api.parse import sliding_window
+from celery_workers.src.api.utils import sliding_window
+
 
 load_dotenv()
 
@@ -18,9 +19,6 @@ def generate_embedding_query(sentence: str):
 
 
 def create_vector_index(pages: list[str], document_id: str):
-    # if do_embeddings_exist(document_id):
-    #     logger.info("Embeddings already exist!")
-    #     delete_embeddings_index(document_id)
     try:
         chunks = sliding_window(pages)
         logger.info("Generating embeddings")
@@ -37,32 +35,9 @@ def create_vector_index(pages: list[str], document_id: str):
         )
 
         add_embeddings_to_pinecone(vectors, document_id)
-
-        # for index, embedding in enumerate(embeddings):
-        #     add_embeddings_to_pinecone(embedding, f"{document_id}:{index}", document_id)
     except Exception as e:
         logger.error(f"Anc exception has occurred in create vector index: {str(e)}")
         raise e
-
-
-# def do_embeddings_exist(document_id: str):
-#     try:
-#         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-#         index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"))
-#         return document_id in index.describe_index_stats()["namespaces"]
-#     except Exception as e:
-#         logger.error(f"An exception has occurred in do embeddings exist: {str(e)}")
-#         raise e
-
-
-# def delete_embeddings_index(document_id: str):
-#     try:
-#         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-#         index = pc.Index(name=os.getenv("PINECONE_INDEX_NAME"))
-#         index.delete(delete_all=True, namespace=document_id)
-#     except Exception as e:
-#         logger.error(f"An exception has occurred in delete embeddings index: {str(e)}")
-#         raise e
 
 
 def generate_embeddings(input_texts: list[str]) -> list[float]:

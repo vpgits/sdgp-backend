@@ -6,17 +6,15 @@ from celery_workers.src.api.embeddings import generate_embedding_query
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from pinecone.core.client.model.query_response import QueryResponse
-from celery_workers.src.config.supabase_client import get_supabase_client
-from celery_workers.src.api.parse import get_pages, sliding_window
+from celery_workers.src.api.utils import sliding_window
 
 load_dotenv()
 
 
-def download_file(path: str, access_token: str, refresh_token: str):
-    supabase: Client = get_supabase_client(access_token, refresh_token)
+def download_file(path: str, supabase_client: Client):
     file_path = f"./resources/{path}"
     try:
-        res = supabase.storage.from_("pdf").download(path)
+        res = supabase_client.storage.from_("pdf").download(path)
         # if the ./resources folder does not exist, create it
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "wb+") as f:
@@ -36,7 +34,7 @@ def extract_context(document_id: str, user_id: str, supabase_client: Client):
         )
         key_points = response.data[0].get("summary").get("key_points")
         logging.info("key points extracted successfully!")
-        if does_extracted_context_exist(document_id, user_id, supabase_client):
+        if does_extracted_context_exist(document_id,supabase_client):
             logging.info("Context already exists!")
             return
         for key_point in key_points:
@@ -47,7 +45,7 @@ def extract_context(document_id: str, user_id: str, supabase_client: Client):
 
 
 def does_extracted_context_exist(
-    document_id: str, user_id: str, supabase_client: Client
+    document_id: str,supabase_client: Client
 ) -> bool:
     try:
         response = (
@@ -93,7 +91,7 @@ def extract_indexes(response: QueryResponse, supabase_client, document_id: str) 
     context: str = ""
     for r in response.matches:
         context_index.append(int(r.get("id").split(":")[1]))
-    pages = get_pages(supabase_client, document_id)
+    pages = get_pages_from_supabase(supabase_client, document_id)
     pages = sliding_window(pages)
     for i in context_index:
         context += pages[i]
@@ -115,3 +113,19 @@ def insert_key_points(supabase: Client, key_points: list[str], quiz_id: str):
     supabase.from_("key_points").insert(
         {"data": json.loads(key_points), "quiz_id": quiz_id}
     ).execute()
+
+
+def add_pages_to_supabase(
+    supabase_client: Client, pages: list[str], document_id: str
+) -> None:
+    supabase_client.table("documents").update({"data": {"data": pages}}).eq(
+        "id", document_id
+    ).execute()
+    logging.info("Pages added successfully!")
+
+
+def get_pages_from_supabase(supabase: Client, document_id: str) -> list[str]:
+    data = supabase.from_("documents").select("data").eq("id", document_id).execute()
+    pages = data.data[0].get("data").get("data")
+    logging.info("Pages retrieved successfully!")
+    return pages
