@@ -75,6 +75,16 @@ def parse_runpod_response(response: dict) -> str:
     #     return mcq
 
 
-def parse_openai_response(response: str):
-    response_json = json.loads(response)
-    return response_json.get("Output")
+def parse_fireworks_response(response: str):
+    try:
+        response_json = json.loads(response)
+        new_mcq_json = {
+            "question": response_json.get("question"),
+            "correct_answer": response_json.get("correctAnswer"),
+            "incorrect_answers": response_json.get("incorrectAnswers"),
+        }
+        return new_mcq_json
+    except Exception as e:
+        logging.error(f"Error parsing fireworks response: {e}")
+        logging.error(f"Failed JSON: {response}")
+        raise e

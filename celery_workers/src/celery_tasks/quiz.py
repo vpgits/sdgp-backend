@@ -16,7 +16,7 @@ from celery_workers.src.api.database import (
     insert_quiz_summary,
 )
 from celery_workers.src.api.helpers import (
-    parse_openai_response,
+    parse_fireworks_response,
     parse_runpod_response,
     update_task_state,
 )
@@ -121,7 +121,7 @@ def generate_mcq_openai_bulk(pages: list[str]):
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = [executor.submit(generate_mcq_fireworks, page) for page in pages]
             wait(futures, return_when=ALL_COMPLETED)
-            results = [parse_openai_response(future.result()) for future in futures]
+            results = [parse_fireworks_response(future.result()) for future in futures]
             return results
     except Exception as e:
         raise e
