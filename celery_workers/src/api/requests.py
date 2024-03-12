@@ -1,5 +1,6 @@
 from openai import OpenAI
-from celery_workers.src.api.models import Mcq, KeyPoints, DocumentSummary, QuizSummary
+
+# from celery_workers.src.api.models import Mcq, KeyPoints, DocumentSummary, QuizSummary
 import json
 import os
 from dotenv import load_dotenv
@@ -7,13 +8,12 @@ import requests
 
 load_dotenv()
 
-FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
+# FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
 
-# if not FIREWORKS_API_KEY:
-#     raise ValueError("FIREWORKS_API_KEY not set")
+# # if not FIREWORKS_API_KEY:
+# #     raise ValueError("FIREWORKS_API_KEY not set")
 
 
-# no test
 def create_mcq_json(key_point="what is encapsulation", context=None):
     client = OpenAI()
     response = client.chat.completions.create(
@@ -35,16 +35,18 @@ def create_mcq_json(key_point="what is encapsulation", context=None):
 
 
 def create_quiz_summary(quiz: list):
-    print(FIREWORKS_API_KEY)
-    client = OpenAI(
-        base_url="https://api.fireworks.ai/inference/v1",
-        api_key=FIREWORKS_API_KEY,
-    )
+    # print(FIREWORKS_API_KEY)
+    # client = OpenAI(
+    #     base_url="https://api.fireworks.ai/inference/v1",
+    #     api_key=FIREWORKS_API_KEY,
+    # )
+    client = OpenAI()
     chat_completion = client.chat.completions.create(
-        model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        # model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        model="gpt-3.5-turbo-1106",
         response_format={
             "type": "json_object",
-            "schema": QuizSummary.model_json_schema(),
+            # "schema": QuizSummary.model_json_schema(),
         },
         max_tokens=1024,
         messages=[
@@ -72,15 +74,17 @@ def create_quiz_summary(quiz: list):
 
 
 def create_key_points(text: str, subtext: str, num_of_questions: int):
-    client = OpenAI(
-        base_url="https://api.fireworks.ai/inference/v1",
-        api_key=FIREWORKS_API_KEY,
-    )
+    # client = OpenAI(
+    #     base_url="https://api.fireworks.ai/inference/v1",
+    #     api_key=FIREWORKS_API_KEY,
+    # )
+    client = OpenAI()
     chat_completion = client.chat.completions.create(
-        model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        # model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        model="gpt-3.5-turbo-1106",
         response_format={
             "type": "json_object",
-            "schema": KeyPoints.model_json_schema(),
+            # "schema": KeyPoints.model_json_schema(),
         },
         max_tokens=1024,
         messages=[
@@ -102,15 +106,17 @@ def create_key_points(text: str, subtext: str, num_of_questions: int):
 
 
 def create_document_summary(pages: list):
-    client = OpenAI(
-        base_url="https://api.fireworks.ai/inference/v1",
-        api_key=FIREWORKS_API_KEY,
-    )
+    # client = OpenAI(
+    #     base_url="https://api.fireworks.ai/inference/v1",
+    #     api_key=FIREWORKS_API_KEY,
+    # )
+    client = OpenAI()
     chat_completion = client.chat.completions.create(
-        model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        # model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        model="gpt-3.5-turbo-1106",
         response_format={
             "type": "json_object",
-            "schema": DocumentSummary.model_json_schema(),
+            # "schema": DocumentSummary.model_json_schema(),
         },
         max_tokens=1024,
         messages=[
@@ -173,15 +179,17 @@ Adhere to the provided JSON schema for your output. Make sure not to generate es
 
 
 def generate_mcq_fireworks(input_text: str):
-    client = OpenAI(
-        base_url="https://api.fireworks.ai/inference/v1",
-        api_key="F73t3mC2l8bGJAK1OUCglY0nrIM7qTPb3lD2GwGPcdKnAnaw",
-    )
+    client = OpenAI()
+    # client = OpenAI(
+    #     base_url="https://api.fireworks.ai/inference/v1",
+    #     api_key=FIREWORKS_API_KEY,
+    # )
     chat_completion = client.chat.completions.create(
-        model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        # model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        model="gpt-3.5-turbo-1106",
         response_format={
             "type": "json_object",
-            "schema": Mcq.model_json_schema(),
+            # "schema": Mcq.model_json_schema(),
         },
         max_tokens=1024,
         messages=[

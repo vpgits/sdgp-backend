@@ -129,3 +129,8 @@ def get_pages_from_supabase(supabase: Client, document_id: str) -> list[str]:
     pages = data.data[0].get("data").get("data")
     logging.info("Pages retrieved successfully!")
     return pages
+
+def add_notification(supabase: Client, title: str, description: str) -> None:
+    supabase.table("notification").insert(
+        {"title": title, "description": description}
+    ).execute()

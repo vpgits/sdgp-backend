@@ -63,6 +63,7 @@ def parse_runpod_response(response: dict) -> str:
             logging.error("Runpod response is None")
     except Exception as e:
         logging.error(f"Error parsing runpod response: {e}")
+        logging.error(f"Failed JSON: {response}")
         raise e
 
     # special_token = "### Output :"
@@ -72,3 +73,8 @@ def parse_runpod_response(response: dict) -> str:
     #     output_json = json.loads(json_str)
     #     mcq = output_json.get("Output")
     #     return mcq
+
+
+def parse_openai_response(response: str):
+    response_json = json.loads(response)
+    return response_json.get("Output")
