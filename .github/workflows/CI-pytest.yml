@@ -17,6 +17,7 @@ jobs:
           echo SUPABASE_KEY=${{ secrets.SUPABASE_KEY }} >> ./celery_workers/.env
           echo TEST_USERNAME=${{ secrets.TEST_USERNAME }} >> ./celery_workers/.env
           echo TEST_PASSWORD=${{ secrets.TEST_PASSWORD }} >> ./celery_workers/.env
+          echo FIREWORKS_API_KEY=${{ secrets.FIREWORKS_API_KEY }} >> ./celery_workers/.env
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
