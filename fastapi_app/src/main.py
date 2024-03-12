@@ -82,6 +82,16 @@ async def rapid_quiz(
 
 @app.get("/{worker_name}/{task_id}")
 async def check_task_status(worker_name: str, task_id: str):
+    """
+    Check the status of a task.
+
+    Args:
+        worker_name (str): The name of the worker function.
+        task_id (str): The ID of the task.
+
+    Returns:
+        dict: A dictionary containing the task ID, task status, and task result.
+    """
     worker_functions = ["preprocess", "generate_mcq", "ticktock", "quiz", "rapid-quiz"]
 
     if worker_name not in worker_functions:

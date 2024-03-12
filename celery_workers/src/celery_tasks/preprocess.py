@@ -55,11 +55,12 @@ def preprocess_worker_helper(
             create_document_summary_context(pages, supabase_client, document_id)
             add_notification(
                 supabase_client,
-                user_id,
+                "Document Preprocessed",
                 f"Document {document_id} has been preprocessed successfully",
             )
     except Exception as e:
         logger.error(f"An exception has occurred on preprocess_worker_helper: {str(e)}")
-        add_notification(supabase_client, user_id, f"Document {document_id} preprocessing failed")
+        add_notification(
+            supabase_client, user_id, f"Document {document_id} preprocessing failed"
+        )
         return {"message": f"failed: {str(e)}"}
-

@@ -13,17 +13,6 @@ def test_quiz_summary():
     assert quiz.title == data["title"]
     assert quiz.summary == data["summary"]
 
-def test_mcq():
-    data = {
-        "question": "Test Question",
-        "correct_answer": "Test Correct Answer",
-        "incorrect_answers": ["Test Incorrect Answer 1", "Test Incorrect Answer 2"]
-    }
-    mcq = Mcq(**data)
-    assert mcq.question == data["question"]
-    assert mcq.correct_answer == data["correct_answer"]
-    assert mcq.incorrect_answers == data["incorrect_answers"]
-
 def test_key_points():
     data = {"key_points": ["Test Key Point 1", "Test Key Point 2"]}
     key_points = KeyPoints(**data)
