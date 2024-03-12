@@ -1,4 +1,5 @@
 from openai import OpenAI
+
 from celery_workers.src.api.models import Mcq, KeyPoints, DocumentSummary, QuizSummary
 import json
 import os
@@ -13,7 +14,6 @@ FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY")
 #     raise ValueError("FIREWORKS_API_KEY not set")
 
 
-# no test
 def create_mcq_json(key_point="what is encapsulation", context=None):
     client = OpenAI()
     response = client.chat.completions.create(
@@ -35,13 +35,14 @@ def create_mcq_json(key_point="what is encapsulation", context=None):
 
 
 def create_quiz_summary(quiz: list):
-    print(FIREWORKS_API_KEY)
     client = OpenAI(
         base_url="https://api.fireworks.ai/inference/v1",
         api_key=FIREWORKS_API_KEY,
     )
+    # client = OpenAI()
     chat_completion = client.chat.completions.create(
         model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        # model="gpt-3.5-turbo-1106",
         response_format={
             "type": "json_object",
             "schema": QuizSummary.model_json_schema(),
@@ -76,8 +77,10 @@ def create_key_points(text: str, subtext: str, num_of_questions: int):
         base_url="https://api.fireworks.ai/inference/v1",
         api_key=FIREWORKS_API_KEY,
     )
+    # client = OpenAI()
     chat_completion = client.chat.completions.create(
         model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        # model="gpt-3.5-turbo-1106",
         response_format={
             "type": "json_object",
             "schema": KeyPoints.model_json_schema(),
@@ -106,8 +109,10 @@ def create_document_summary(pages: list):
         base_url="https://api.fireworks.ai/inference/v1",
         api_key=FIREWORKS_API_KEY,
     )
+    # client = OpenAI()
     chat_completion = client.chat.completions.create(
         model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        # model="gpt-3.5-turbo-1106",
         response_format={
             "type": "json_object",
             "schema": DocumentSummary.model_json_schema(),
@@ -173,15 +178,17 @@ Adhere to the provided JSON schema for your output. Make sure not to generate es
 
 
 def generate_mcq_fireworks(input_text: str):
+    # client = OpenAI()
     client = OpenAI(
         base_url="https://api.fireworks.ai/inference/v1",
-        api_key="F73t3mC2l8bGJAK1OUCglY0nrIM7qTPb3lD2GwGPcdKnAnaw",
+        api_key=FIREWORKS_API_KEY,
     )
     chat_completion = client.chat.completions.create(
         model="accounts/fireworks/models/mixtral-8x7b-instruct",
+        # model="gpt-3.5-turbo-1106",
         response_format={
             "type": "json_object",
-            "schema": Mcq.model_json_schema(),
+            "schema": Mcq.schema_json(),
         },
         max_tokens=1024,
         messages=[
@@ -194,23 +201,7 @@ Task Objective:
 Analyze the text to identify the core concept.
 Formulate a question that encapsulates this concept.
 Determine one correct answer and generate three plausible incorrect answers.
-Adhere to the provided JSON schema for your output. Make sure not to generate escape characters.
-.The output should be formatted as a json in the below format." + "{\"type\": \"object\", \"properties\": {\"Output\": {\"type\": \"object\", \"properties\": {\"question\": {\"type\": \"string\"}, \"correct_answer\": {\"type\": \"string\"}, \"incorrect_answers\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"question\", \"correct_answer\", \"incorrect_answers\"]}}, \"required\": [\"Output\"]}"""
-                + str(
-                    {
-                        "$schema": "http://json-schema.org/draft-07/schema#",
-                        "type": "object",
-                        "properties": {
-                            "question": {"type": "string"},
-                            "correct_answer": {"type": "string"},
-                            "incorrect_answers": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                        },
-                        "required": ["question", "correct_answer", "incorrect_answers"],
-                    }
-                ),
+Adhere to the provided JSON schema for your output. Make sure not to generate escape characters."""
             },
             {"role": "user", "content": input_text},
         ],

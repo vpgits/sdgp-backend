@@ -1,5 +1,5 @@
 from celery_app.celery_app import app
-from celery_workers.src.api.database import extract_context
+from celery_workers.src.api.database import add_notification
 from celery_workers.src.config.supabase_client import (
     get_supabase_client,
     get_current_user,
@@ -53,6 +53,13 @@ def preprocess_worker_helper(
             create_vector_index(pages, document_id)
             update_task_state(task, "Creating document summary")
             create_document_summary_context(pages, supabase_client, document_id)
+            add_notification(
+                supabase_client,
+                user_id,
+                f"Document {document_id} has been preprocessed successfully",
+            )
     except Exception as e:
         logger.error(f"An exception has occurred on preprocess_worker_helper: {str(e)}")
+        add_notification(supabase_client, user_id, f"Document {document_id} preprocessing failed")
         return {"message": f"failed: {str(e)}"}
+

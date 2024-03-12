@@ -1,3 +1,4 @@
+from typing import List
 from pydantic import BaseModel, Field
 
 
@@ -12,10 +13,10 @@ class QuizSummary(BaseModel):
 
 
 class Mcq(BaseModel):
-    question: str = Field(..., description="Question of the user text")
-    correct_answer: str = Field(..., description="Correct answer of the user text")
-    incorrect_answers: list = Field(
-        ..., description="Incorrect answers of the user text"
+    question: str = Field(description="Question of the user question")
+    correctAnswer: str = Field(description="Correct answer of the user question")
+    incorrectAnswers: List[str] = Field(
+        description="Incorrect answers of the user question"
     )
 
 

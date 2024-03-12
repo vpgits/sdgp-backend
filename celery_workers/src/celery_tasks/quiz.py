@@ -3,7 +3,6 @@ import logging
 import celery
 import json
 from celery_workers.src.api.embeddings import get_similar_embeddings
-from celery_workers.src.api.parse import get_pages_from_supabase
 from celery_workers.src.api.utils import sliding_window
 from celery_workers.src.config.supabase_client import get_supabase_client
 from supabase import Client
@@ -11,10 +10,13 @@ from celery_app.celery_app import app
 from dotenv import load_dotenv
 
 from celery_workers.src.api.database import (
+    add_notification,
+    get_pages_from_supabase,
     insert_key_points,
     insert_quiz_summary,
 )
 from celery_workers.src.api.helpers import (
+    parse_fireworks_response,
     parse_runpod_response,
     update_task_state,
 )
@@ -32,7 +34,7 @@ logger.setLevel(logging.INFO)
 
 
 @app.task(bind=True, name="quiz")
-def quiz_worker(self, quiz_id, default_model, access_token, refresh_token):
+def quiz_worker(self: celery.Task, quiz_id, default_model, access_token, refresh_token):
     try:
         supabase_client = get_supabase_client(access_token, refresh_token)
         quiz_worker_helper(self, supabase_client, quiz_id, default_model)
@@ -67,10 +69,11 @@ def rapid_quiz_worker_helper(
         pages = get_pages_from_supabase(supabase, document_id)
         update_task_state(task, "Generating questions")
         pages = sliding_window(pages)
+        default_model = data.data[0]["default_model"]
         if default_model:
             mcqs = generate_mcq_runopod_bulk(pages)
         else:
-            mcqs = generate_mcq_fireworks_bulk(pages)
+            mcqs = generate_mcq_openai_bulk(pages)
         if not mcqs:
             logging.error("Endpoint seems to be busy")
             update_task_state(
@@ -82,9 +85,15 @@ def rapid_quiz_worker_helper(
         supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
         update_task_state(task, "Creating quiz summary")
         create_quiz_summary_context(supabase, quiz_id, mcqs)
+        add_notification(
+            supabase,
+            "Rapid Quiz",
+            "Rapid Quiz generated successfully for quiz_id: {quiz_id}",
+        )
     except Exception as e:
         update_task_state(task, "Failed")  # Update the task state to indicate failure
-        logging.error(f"Error in rapid_quiz_worker_helper: {e}")
+        logging.error(f"Error in rapid_quiz_worker_helper for quiz_id {quiz_id}: {e}")
+        add_notification(supabase, "Rapid Quiz", f"Rapid Quiz generation failed: {e}")
         raise e
 
 
@@ -107,12 +116,12 @@ def generate_mcq_runopod_bulk(pages: list[str]):
         raise e
 
 
-def generate_mcq_fireworks_bulk(pages: list[str]):
+def generate_mcq_openai_bulk(pages: list[str]):
     try:
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = [executor.submit(generate_mcq_fireworks, page) for page in pages]
             wait(futures, return_when=ALL_COMPLETED)
-            results = [parse_runpod_response(future.result()) for future in futures]
+            results = [parse_fireworks_response(future.result()) for future in futures]
             return results
     except Exception as e:
         raise e
@@ -144,10 +153,11 @@ def quiz_worker_helper(
             get_similar_embeddings(key_point, document_id, pages)
             for key_point in key_points
         ]
+        default_model = data.data[0]["default_model"]
         if default_model:
             mcqs = generate_mcq_runopod_bulk(contexts)
         else:
-            mcqs = generate_mcq_fireworks_bulk(contexts)
+            mcqs = generate_mcq_openai_bulk(contexts)
         if not mcqs:
             logging.error("Endpoint seems to be busy")
             update_task_state(
@@ -159,9 +169,15 @@ def quiz_worker_helper(
         supabase.from_("quiz").update({"generating": False}).eq("id", quiz_id).execute()
         update_task_state(task, "Creating quiz summary")
         create_quiz_summary_context(supabase, quiz_id, mcqs)
+        add_notification(
+            supabase, "Quiz", f"Quiz generated successfully for quiz_id: {quiz_id}"
+        )
     except Exception as e:
         update_task_state(task, "Failed")  # Update the task state to indicate failure
         logging.error(f"Error in quiz_worker_helper: {e}")
+        add_notification(
+            supabase, "Quiz", f"Quiz generation failed for quiz_id {quiz_id}: {e}"
+        )
 
 
 def create_quiz_summary_context(
