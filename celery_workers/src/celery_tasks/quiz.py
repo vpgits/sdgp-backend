@@ -88,7 +88,7 @@ def rapid_quiz_worker_helper(
         add_notification(
             supabase,
             "Rapid Quiz",
-            "Rapid Quiz generated successfully for quiz_id: {quiz_id}",
+            f"Rapid Quiz generated successfully for quiz_id: {quiz_id}",
         )
     except Exception as e:
         update_task_state(task, "Failed")  # Update the task state to indicate failure
