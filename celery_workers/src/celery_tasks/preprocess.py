@@ -50,7 +50,7 @@ def preprocess_worker_helper(
         pages = get_pages_from_supabase(supabase_client, document_id)
         if pages:
             update_task_state(task, "Creating vector index")
-            create_vector_index(pages, document_id)
+            create_vector_index(pages, document_id, supabase_client)
             update_task_state(task, "Creating document summary")
             create_document_summary_context(pages, supabase_client, document_id)
             add_notification(
