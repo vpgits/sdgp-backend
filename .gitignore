@@ -160,3 +160,4 @@ cython_debug/
 #.idea/
 /resources/
 celery_workers/src/api/gte-small
+docker-compose.yml
