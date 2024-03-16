@@ -27,6 +27,7 @@ jobs:
           echo RUNPOD_API_SECRET=${{ secrets.RUNPOD_API_KEY }} >> ./celery_workers/.env
           echo GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} >> ./celery_workers/.env
           echo BROKER_URL=${{ secrets.BROKER_URL }} >> ./celery_workers/.env
+          echo DB_CONNECTION=${{ secrets.DB_CONNECTION }} >> ./celery_workers/.env
           echo BACKEND_URL=${{ secrets.BACKEND_URL }} >> ./celery_app/.env
           echo BROKER_URL=${{ secrets.BROKER_URL }} >> ./celery_app/.env
           
