@@ -2,7 +2,7 @@ from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 import logging
 import celery
 import json
-from celery_workers.src.api.embeddings import get_similar_embeddings
+from celery_workers.src.api.embeddings import get_similar_embeddings, get_similar_embeddings_supabase
 from celery_workers.src.api.utils import sliding_window
 from celery_workers.src.config.supabase_client import get_supabase_client
 from supabase import Client
@@ -88,7 +88,7 @@ def rapid_quiz_worker_helper(
         add_notification(
             supabase,
             "Rapid Quiz",
-            "Rapid Quiz generated successfully for quiz_id: {quiz_id}",
+            f"Rapid Quiz generated successfully for quiz_id: {quiz_id}",
         )
     except Exception as e:
         update_task_state(task, "Failed")  # Update the task state to indicate failure
@@ -150,7 +150,7 @@ def quiz_worker_helper(
         update_task_state(task, "Generating questions")
         key_points = json.loads(key_points).get("key_points")
         contexts = [
-            get_similar_embeddings(key_point, document_id, pages)
+            get_similar_embeddings_supabase(key_point, document_id, pages)
             for key_point in key_points
         ]
         default_model = data.data[0]["default_model"]

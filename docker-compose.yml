@@ -5,11 +5,21 @@ services:
     image: backend-quizzifyme.venura.dev/sdgp-backend-web:latest
     ports:
       - "8000:8000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - rabbitmq
 
   worker:
     image: backend-quizzifyme.venura.dev/sdgp-backend-worker:latest
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       - rabbitmq
 
@@ -18,6 +28,11 @@ services:
     volumes:
       - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_management.load_definitions "/etc/rabbitmq/definitions.json"
     ports:
@@ -26,5 +41,10 @@ services:
 
   redis:
     image: "redis:7.2-alpine"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "6379:6379"
