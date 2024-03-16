@@ -1,11 +1,14 @@
 import logging
 import os
 from dotenv import load_dotenv
+from supabase import Client
 import torch.nn.functional as F
 from torch import Tensor
 from transformers import AutoTokenizer, AutoModel
 from pinecone import Pinecone
 from celery_workers.src.api.utils import sliding_window
+import vecs
+from vecs import IndexMethod, IndexMeasure, IndexArgsHNSW
 
 
 load_dotenv()
@@ -18,7 +21,7 @@ def generate_embedding_query(sentence: str):
     return generate_embeddings([sentence])
 
 
-def create_vector_index(pages: list[str], document_id: str):
+def create_vector_index(pages: list[str], document_id: str, supabase: Client):
     try:
         chunks = sliding_window(pages)
         logger.info("Generating embeddings")
@@ -28,13 +31,13 @@ def create_vector_index(pages: list[str], document_id: str):
             chunk_subset = chunks[i : i + chunk_size]
             embeddings.extend(generate_embeddings(chunk_subset))
         logger.info(f"{len(chunks)} Embeddings generated")
-        logger.info("Adding embeddings to Pinecone")
-        vectors = list(
-            (f"{document_id}:{index}", embedding)
-            for index, embedding in enumerate(embeddings)
-        )
-
-        add_embeddings_to_pinecone(vectors, document_id)
+        logger.info("Adding embeddings to Supabase")
+        # vectors = list(
+        #     (f"{document_id}:{index}", embedding)
+        #     for index, embedding in enumerate(embeddings)
+        # )
+        # add_embeddings_to_pinecone(vectors, document_id)
+        add_embeddings_to_supabase(embeddings, document_id)
     except Exception as e:
         logger.error(f"Anc exception has occurred in create vector index: {str(e)}")
         raise e
@@ -102,6 +105,27 @@ def get_similar_embeddings(sentence: str, document_id: str, pages: list[str]):
         raise e
 
 
+def get_similar_embeddings_supabase(sentence: str, document_id: str, pages: list[str]):
+    try:
+        sentence_embedding = generate_embedding_query(sentence)[0]
+        DB_CONNECTION = os.getenv("DB_CONNECTION")
+        vx = vecs.create_client(DB_CONNECTION)
+        doc = vx.get_or_create_collection(name=document_id, dimension=384)
+        matches = doc.query(
+            data=sentence_embedding,
+            limit=3,
+            measure=IndexMeasure.cosine_distance,
+            include_value=False,
+            include_metadata=False,
+        )
+        return extract_context_supabase(matches, pages)
+    except Exception as e:
+        logger.error(
+            f"An exception has occurred when getting similar embeddings: {str(e)}"
+        )
+        raise e
+
+
 def extract_context(matches: list[any], pages: list[str]):
     try:
         context_ids = [match.get("id").split(":")[1] for match in matches]
@@ -111,4 +135,39 @@ def extract_context(matches: list[any], pages: list[str]):
         return context
     except Exception as e:
         logger.error(f"An exception has occurred when extracting context: {str(e)}")
+        raise e
+
+
+def extract_context_supabase(matches: list[any], pages: list[str]):
+    try:
+        context_ids = [match.split(":")[1] for match in matches]
+        chunks = sliding_window(pages)
+        context = [chunks[int(context_id)] for context_id in context_ids]
+        context = "".join(context)
+        return context
+    except Exception as e:
+        logger.error(f"An exception has occurred when extracting context: {str(e)}")
+        raise e
+
+
+def add_embeddings_to_supabase(embeddings: list[dict], document_id: str):
+    try:
+        DB_CONNECTION = os.getenv("DB_CONNECTION")
+        vx = vecs.create_client(DB_CONNECTION)
+        doc = vx.get_or_create_collection(name=document_id, dimension=384)
+        data = [
+            (f"{document_id}:{index}", embedding, "")
+            for index, embedding in enumerate(embeddings)
+        ]
+        doc.upsert(records=data)
+        doc.create_index(
+            method=IndexMethod.hnsw,
+            measure=IndexMeasure.cosine_distance,
+            index_arguments=IndexArgsHNSW(m=8),
+        )
+    # supabase.from_("embeddings").upsert(data).execute()
+    except Exception as e:
+        logger.error(
+            f"An exception has occurred when adding embeddings to supabase: {str(e)}"
+        )
         raise e
