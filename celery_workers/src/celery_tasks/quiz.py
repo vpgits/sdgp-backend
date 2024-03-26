@@ -150,7 +150,8 @@ def quiz_worker_helper(
         update_task_state(task, "Generating questions")
         key_points = json.loads(key_points).get("key_points")
         contexts = [
-            get_similar_embeddings_supabase(key_point, document_id, pages)
+
+            get_similar_embeddings(key_point, document_id, pages)
             for key_point in key_points
         ]
         default_model = data.data[0]["default_model"]

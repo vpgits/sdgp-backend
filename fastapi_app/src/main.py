@@ -26,7 +26,7 @@ def extract_header_auth_tokens(request: Request) -> tuple[str, str]:
         200: {
             "task_id": "task_id",
             "message": "Task has been sent to the background worker",
-        }
+        },
     },
 )
 async def preprocess(
@@ -58,7 +58,7 @@ async def preprocess(
         200: {
             "task_id": "task_id",
             "message": "Task has been sent to the background worker",
-        }
+        },
     },
 )
 async def tick_tock():
@@ -79,7 +79,7 @@ async def tick_tock():
         200: {
             "task_id": "task_id",
             "message": "Task has been sent to the background worker",
-        }
+        },
     },
 )
 async def quiz(
@@ -109,7 +109,7 @@ async def quiz(
         200: {
             "task_id": "task_id",
             "message": "Task has been sent to the background worker",
-        }
+        },
     },
 )
 async def rapid_quiz(
@@ -136,9 +136,6 @@ async def rapid_quiz(
 @app.get(
     "/{worker_name}/{task_id}",
     description="Check the status of a task",
-    responses={
-        200: {'"task_id": task_id, "task_status": task.state, "task_result": task.info'}
-    },
 )
 async def check_task_status(worker_name: str, task_id: str):
     """

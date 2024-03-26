@@ -32,12 +32,12 @@ def create_vector_index(pages: list[str], document_id: str, supabase: Client):
             embeddings.extend(generate_embeddings(chunk_subset))
         logger.info(f"{len(chunks)} Embeddings generated")
         logger.info("Adding embeddings to Supabase")
-        # vectors = list(
-        #     (f"{document_id}:{index}", embedding)
-        #     for index, embedding in enumerate(embeddings)
-        # )
-        # add_embeddings_to_pinecone(vectors, document_id)
-        add_embeddings_to_supabase(embeddings, document_id)
+        vectors = list(
+            (f"{document_id}:{index}", embedding)
+            for index, embedding in enumerate(embeddings)
+        )
+        add_embeddings_to_pinecone(vectors, document_id)
+        # add_embeddings_to_supabase(embeddings, document_id)
     except Exception as e:
         logger.error(f"Anc exception has occurred in create vector index: {str(e)}")
         raise e
